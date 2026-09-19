@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 
 import { db, schema } from "@/lib/db";
 import { getPublishedProductBySlug } from "@/lib/server/actions/checkout";
@@ -24,7 +24,14 @@ export default async function CheckoutPage({ params }: { params: Promise<{ slug:
   const files = await db
     .select()
     .from(schema.productFiles)
-    .where(eq(schema.productFiles.productId, product.id))
+    .where(
+      and(
+        eq(schema.productFiles.productId, product.id),
+        /* Solo los archivos del curso (con carpeta); las imágenes de
+           promoción no se listan en el checkout. */
+        isNotNull(schema.productFiles.groupId),
+      ),
+    )
     .orderBy(asc(schema.productFiles.sortOrder));
   const activeFiles = files.filter((f) => f.isActive);
 

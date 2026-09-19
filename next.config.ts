@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
      túnel. Sin esto la página carga pero NO hidrata: los bloques `.sf-reveal`
      se quedan en opacity 0 y solo se ve el fondo y la cabecera. */
   allowedDevOrigins: ["*.trycloudflare.com"],
+  /* mupdf (WASM + .wasm hermano) y sharp (addon nativo) se cargan desde
+     node_modules en runtime; no deben compilarse/bundlearse en la build. */
+  serverExternalPackages: ["mupdf", "sharp"],
 };
 
 export default nextConfig;

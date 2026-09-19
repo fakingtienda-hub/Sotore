@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
 import { storage, StorageError } from "@/lib/server/storage";
+import { buildProductPackZip } from "@/lib/server/pack";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export async function GET(
   }
   const userId = session.user.id;
 
-  // --- 2) Producto + pack generado ----------------------------------------
+  // --- 2) Producto + compra activa (los admins pueden probarlo sin compra) --
   const [product] = await db
     .select()
     .from(schema.products)
@@ -33,14 +34,6 @@ export async function GET(
     return Response.json({ error: "Producto no encontrado." }, { status: 404 });
   }
 
-  if (!product.zipKey) {
-    return Response.json(
-      { error: "El pack completo aún no está disponible para este producto." },
-      { status: 404 },
-    );
-  }
-
-  // --- 3) Compra activa (los admins pueden probarlo sin compra) -----------
   const [purchase] = await db
     .select()
     .from(schema.purchases)
@@ -55,6 +48,16 @@ export async function GET(
 
   if (!purchase && session.user.role !== "admin") {
     return Response.json({ error: "No tienes acceso a este producto." }, { status: 403 });
+  }
+
+  // --- 3) Generar el pack al vuelo si aún no existe ------------------------
+  if (!product.zipKey) {
+    const result = await buildProductPackZip(productId);
+    if (!result.ok) {
+      return Response.json({ error: result.error ?? "No hay archivos para comprimir." }, { status: 404 });
+    }
+    product.zipKey = `products/${productId}/pack.zip`;
+    product.zipSizeBytes = result.sizeBytes ?? 0;
   }
 
   // --- 4) Servir el ZIP ----------------------------------------------------

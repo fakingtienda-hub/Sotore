@@ -1,12 +1,12 @@
-import Link from "next/link";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { sql } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
-import { formatFileSize, formatPrice } from "@/lib/utils/format";
-import { FilesList } from "./_components/files-list";
+import { FilesList, type LibraryFileGroup, type LibraryFileRow } from "./_components/files-list";
+import "./_components/library-gallery.css";
 
 export const dynamic = "force-dynamic";
 
@@ -40,68 +40,76 @@ export default async function LibraryProductPage({
 
   if (!purchase) notFound();
 
-  const [files, groups] = await Promise.all([
+  const [fileRows, groups, downloadRows] = await Promise.all([
     db
       .select()
       .from(schema.productFiles)
-      .where(and(eq(schema.productFiles.productId, product.id), eq(schema.productFiles.isActive, true)))
+      .where(
+        and(
+          eq(schema.productFiles.productId, product.id),
+          eq(schema.productFiles.isActive, true),
+          /* Solo los archivos del curso: los que están en una carpeta. Las
+             imágenes de promoción del producto se cargan sin carpeta y no
+             deben aparecer en la biblioteca. */
+          isNotNull(schema.productFiles.groupId),
+        ),
+      )
       .orderBy(schema.productFiles.sortOrder),
     db
       .select()
       .from(schema.productFileGroups)
       .where(eq(schema.productFileGroups.productId, product.id))
       .orderBy(schema.productFileGroups.position),
+    db
+      .select({
+        fileId: schema.downloads.fileId,
+        n: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(schema.downloads)
+      .where(eq(schema.downloads.productId, product.id))
+      .groupBy(schema.downloads.fileId),
   ]);
 
+  const downloadsByFile = new Map(downloadRows.map((d) => [d.fileId, d.n]));
+
+  const groupCounts = new Map<string, number>();
+  for (const f of fileRows) {
+    if (f.groupId) {
+      groupCounts.set(f.groupId, (groupCounts.get(f.groupId) ?? 0) + 1);
+    }
+  }
+
+  const files: LibraryFileRow[] = fileRows.map((f) => ({
+    id: f.id,
+    name: f.name,
+    fileType: f.fileType,
+    mimeType: f.mimeType,
+    sizeBytes: f.sizeBytes,
+    downloadLimit: f.downloadLimit,
+    groupId: f.groupId as string,
+    createdAt: f.createdAt.toISOString(),
+    downloadCount: f.id ? (downloadsByFile.get(f.id) ?? 0) : 0,
+  }));
+
+  const catalogGroups: LibraryFileGroup[] = groups
+    .map((g) => ({ id: g.id, name: g.name, count: groupCounts.get(g.id) ?? 0 }))
+    .filter((g) => g.count > 0);
+
   return (
-    <div className="mx-auto w-full max-w-4xl">
-      <Link href="/library" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        ← Volver a mi biblioteca
-      </Link>
-
-      <div className="mt-2 flex flex-col gap-6 sm:flex-row sm:items-start">
-        <div className="shrink-0">
-          {product.coverImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={product.coverImageUrl}
-              alt={product.title}
-              className="h-48 w-48 rounded-2xl border border-border object-cover"
-            />
-          ) : (
-            <div className="flex h-48 w-48 items-center justify-center rounded-2xl border border-border bg-card text-5xl opacity-40" aria-hidden>📦</div>
-          )}
-        </div>
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">{product.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{formatPrice(product.price, product.currency)}</p>
-        </div>
-      </div>
-
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-lg font-semibold">Archivos incluidos</h2>
-        {product.zipKey ? (
-          <a
-            href={`/api/products/${product.id}/pack`}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Descargar todo (ZIP)
-            {product.zipSizeBytes != null ? ` · ${formatFileSize(product.zipSizeBytes)}` : ""}
-          </a>
-        ) : null}
-      </div>
-
+    <div className="library-gallery">
       <FilesList
-        groups={groups.map((g) => ({ id: g.id, name: g.name }))}
-        files={files.map((f) => ({
-          id: f.id,
-          name: f.name,
-          fileType: f.fileType,
-          sizeBytes: f.sizeBytes,
-          mimeType: f.mimeType,
-          downloadLimit: f.downloadLimit,
-          groupId: f.groupId,
-        }))}
+        product={{
+          id: product.id,
+          slug: product.slug,
+          title: product.title,
+          price: product.price,
+          compareAtPrice: product.compareAtPrice,
+          currency: product.currency,
+          coverImageUrl: product.coverImageUrl ?? null,
+          zipSizeBytes: product.zipSizeBytes,
+        }}
+        files={files}
+        groups={catalogGroups}
       />
     </div>
   );
