@@ -6,6 +6,8 @@
    ========================================================================== */
 
 .library-gallery {
+  --page-gutter: clamp(16px, 2.4vw, 48px);
+  --content-max: 1680px;
   --bg: #fbfaf6;
   --surface: #ffffff;
   --surface-soft: #f8f1e9;
@@ -24,11 +26,11 @@
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 22px;
-  --content-width: 1480px;
 
-  width: min(100%, var(--content-width));
-  margin: 0 auto;
-  padding: 4px 0 48px;
+  width: min(100% - (var(--page-gutter) * 2), var(--content-max));
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding-block: 24px 56px;
 
   color: var(--text);
   background: var(--bg);
@@ -92,10 +94,11 @@
    -------------------------------------------------------------------------- */
 .library-gallery .product-hero {
   display: grid;
-  grid-template-columns: clamp(140px, 13vw, 190px) minmax(0, 1fr) clamp(220px, 21vw, 300px);
-  gap: 20px;
+  grid-template-columns: minmax(150px, 190px) minmax(0, 1fr) minmax(240px, 300px);
+  gap: clamp(20px, 3vw, 42px);
   align-items: center;
-  padding: 22px 28px;
+  width: 100%;
+  padding: clamp(20px, 2.3vw, 34px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: linear-gradient(105deg, #fcfbf8 0%, #fffdfa 68%, #f9f0e8 100%);
@@ -129,16 +132,16 @@
 
 .library-gallery .product-copy {
   min-width: 0;
+  width: 100%;
 }
 
 .library-gallery .product-copy h1 {
   margin: 0;
   color: #28221e;
-  font-size: clamp(1.15rem, 2vw, 2.75rem);
+  font-size: clamp(1.55rem, 2.25vw, 2.65rem);
   line-height: 1.08;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.035em;
   font-weight: 800;
-  white-space: nowrap;
 }
 
 .library-gallery .product-price {
@@ -260,15 +263,20 @@
    -------------------------------------------------------------------------- */
 .library-gallery .library-toolbar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 210px 210px 180px;
-  gap: 14px;
+  grid-template-columns: minmax(220px, 1fr) minmax(170px, 210px) minmax(170px, 210px) minmax(150px, 180px);
+  gap: 12px;
   align-items: center;
+  width: 100%;
   margin: 22px 0 24px;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 17px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+}
+
+.library-gallery .search-box {
+  min-width: 0;
 }
 
 .library-gallery .search-box,
@@ -289,6 +297,7 @@
 }
 
 .library-gallery .search-box input {
+  min-width: 0;
   width: 100%;
   border: 0;
   outline: 0;
@@ -337,7 +346,8 @@
 .library-gallery .library-content {
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr);
-  gap: 28px;
+  gap: clamp(18px, 2vw, 30px);
+  align-items: start;
 }
 
 .library-gallery .category-sidebar {
@@ -425,6 +435,7 @@
    -------------------------------------------------------------------------- */
 .library-gallery .pattern-area {
   min-width: 0;
+  width: 100%;
 }
 
 .library-gallery .pattern-header {
@@ -500,7 +511,7 @@
 .library-gallery .pattern-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 22px;
+  gap: clamp(14px, 1.6vw, 24px);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -789,36 +800,55 @@
 /* --------------------------------------------------------------------------
    Responsive
    --------------------------------------------------------------------------
-   Escritorio y tablet horizontal (>= 901px): el hero conserva las tres zonas
-   (producto | contenido central | aviso) y el título se mantiene en una línea.
-   El layout de tablet solo se activa desde 900px hacia abajo.
+   Tres niveles:
+   - Escritorio grande (>= 1200px): hero de tres zonas, contenido 230px + 1fr,
+     tarjetas en 3 columnas y título en una sola línea.
+   - Tablet horizontal (768px - 1199px): hero de tres zonas más compacto,
+     contenido 190px + 1fr y tarjetas en 2 columnas.
+   - Móvil (< 768px): una columna, toolbar vertical y sidebar desplazable.
    -------------------------------------------------------------------------- */
 
-/* Tablet */
-@media (max-width: 900px) {
-  .library-gallery .product-hero {
-    grid-template-columns: 160px minmax(0, 1fr);
-  }
-
-  .library-gallery .hero-note {
-    grid-column: 1 / -1;
-  }
-
+/* Escritorio grande */
+@media (min-width: 1200px) {
   .library-gallery .product-copy h1 {
-    white-space: normal;
+    white-space: nowrap;
+  }
+}
+
+/* Pantallas muy amplias: cuatro columnas si las tarjetas siguen legibles */
+@media (min-width: 1500px) {
+  .library-gallery .pattern-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Tablet horizontal */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .library-gallery {
+    width: 100%;
+    padding-inline: clamp(16px, 2.5vw, 32px);
+  }
+
+  .library-gallery .product-hero {
+    grid-template-columns: 150px minmax(0, 1fr) 250px;
+    gap: 20px;
+  }
+
+  .library-gallery .library-content {
+    grid-template-columns: 190px minmax(0, 1fr);
+    gap: 18px;
   }
 
   .library-gallery .library-toolbar {
-    grid-template-columns: minmax(0, 1fr) 180px 180px;
+    grid-template-columns: minmax(180px, 1fr) 170px 170px;
   }
 
   .library-gallery .search-box {
     grid-column: 1 / -1;
   }
 
-  .library-gallery .library-content {
-    grid-template-columns: 1fr;
-    gap: 18px;
+  .library-gallery .favorite-button {
+    grid-column: 3;
   }
 
   .library-gallery .category-sidebar {
@@ -832,7 +862,7 @@
   }
 
   .library-gallery .category-item {
-    min-width: 170px;
+    min-width: 160px;
     border-bottom: 0;
     border-right: 1px solid #f0e8e0;
   }
@@ -843,20 +873,22 @@
 
   .library-gallery .pattern-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
+    gap: clamp(14px, 1.6vw, 24px);
   }
 }
 
 /* Móvil */
-@media (max-width: 760px) {
+@media (max-width: 767px) {
   .library-gallery {
-    padding-top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 12px 12px 32px;
   }
 
   .library-gallery .product-hero {
     grid-template-columns: 1fr;
-    gap: 8px;
-    padding: 18px;
+    gap: 14px;
+    padding: 18px 16px;
     text-align: center;
   }
 
@@ -865,8 +897,8 @@
   }
 
   .library-gallery .product-visual img {
-    width: 150px;
-    max-height: 160px;
+    width: 140px;
+    max-height: 150px;
   }
 
   .library-gallery .product-visual .hero-fallback {
@@ -875,7 +907,25 @@
   }
 
   .library-gallery .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
     justify-content: center;
+  }
+
+  .library-gallery .primary-button,
+  .library-gallery .secondary-button {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .library-gallery .secondary-button {
+    justify-content: center;
+  }
+
+  .library-gallery .hero-note {
+    grid-column: auto;
+    text-align: left;
   }
 
   .library-gallery .product-benefits {
@@ -884,7 +934,7 @@
 
   .library-gallery .benefit {
     justify-content: flex-start;
-    min-height: 44px;
+    min-height: 42px;
     padding: 8px 16px;
     white-space: normal;
   }
@@ -896,12 +946,44 @@
 
   .library-gallery .library-toolbar {
     grid-template-columns: 1fr;
+    gap: 9px;
     padding: 8px;
+  }
+
+  .library-gallery .library-toolbar > *:not(.lg-sr-only) {
+    width: 100%;
+    min-height: 44px;
   }
 
   .library-gallery .search-box,
   .library-gallery .favorite-button {
     grid-column: auto;
+  }
+
+  .library-gallery .library-content {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .library-gallery .category-sidebar {
+    position: static;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .library-gallery .category-list {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .library-gallery .category-item {
+    min-width: 132px;
+    min-height: 48px;
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
   }
 
   .library-gallery .pattern-header {
@@ -910,12 +992,17 @@
 
   .library-gallery .pattern-actions {
     width: 100%;
+    flex-wrap: wrap;
     justify-content: flex-start;
   }
 
   .library-gallery .pattern-grid {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 14px;
+  }
+
+  .library-gallery .pattern-card-media {
+    height: clamp(180px, 52vw, 260px);
   }
 
   .library-gallery .card-actions button,
@@ -923,13 +1010,34 @@
     min-height: 42px;
   }
 
-  .library-gallery .primary-button {
-    width: 100%;
-  }
-
   .library-gallery .modal-panel {
     padding: 18px;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Sin scroll horizontal y sin desbordes de contenido
+   -------------------------------------------------------------------------- */
+html {
+  overflow-x: hidden;
+}
+
+body {
+  width: 100%;
+  min-width: 320px;
+  overflow-x: hidden;
+}
+
+.library-gallery img,
+.library-gallery svg,
+.library-gallery video {
+  max-width: 100%;
+}
+
+.library-gallery button,
+.library-gallery input,
+.library-gallery select {
+  max-width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {

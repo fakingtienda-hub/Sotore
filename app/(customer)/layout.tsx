@@ -34,7 +34,7 @@ export default async function CustomerLayout({ children }: { children: ReactNode
           <SignOutButton className="text-muted-foreground transition-colors hover:text-foreground" />
         </div>
       </header>
-      <main className="flex-1 px-4 py-8 md:px-8">{children}</main>
+      <main className="flex-1 w-full">{children}</main>
     </div>
   );
 }

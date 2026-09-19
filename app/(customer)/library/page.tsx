@@ -30,7 +30,7 @@ export default async function LibraryPage() {
   const active = purchases.filter((p) => p.grantedAt != null);
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 md:px-8">
       <h1 className="font-display text-2xl font-semibold tracking-tight">Mi biblioteca</h1>
       <p className="mt-1 text-sm text-muted-foreground">Tus productos comprados con acceso a descargas.</p>
 
