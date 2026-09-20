@@ -63,7 +63,37 @@ async function main() {
     console.log(`product_file ya existe: ${existingFile.id}`);
   }
 
-  console.log("fixture fase9 OK");
+  // La biblioteca SOLO lista archivos con carpeta (groupId != null); sin
+  // grupo el fixture sería invisible aun estando activo.
+  const [fileRow] = await db
+    .select()
+    .from(schema.productFiles)
+    .where(eq(schema.productFiles.productId, product.id))
+    .limit(1);
+  if (fileRow) {
+    let [group] = await db
+      .select()
+      .from(schema.productFileGroups)
+      .where(eq(schema.productFileGroups.productId, product.id))
+      .limit(1);
+    if (!group) {
+      await db
+        .insert(schema.productFileGroups)
+        .values({ productId: product.id, name: "Patrones de prueba", position: 0 });
+      [group] = await db
+        .select()
+        .from(schema.productFileGroups)
+        .where(eq(schema.productFileGroups.productId, product.id))
+        .limit(1);
+    }
+    if (group && !fileRow.groupId) {
+      await db
+        .update(schema.productFiles)
+        .set({ groupId: group.id })
+        .where(eq(schema.productFiles.id, fileRow.id));
+      console.log(`demo-patron.pdf asignado al grupo ${group.id}`);
+    }
+  }
   await queryClient.end();
 }
 

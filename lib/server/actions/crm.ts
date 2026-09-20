@@ -4,6 +4,7 @@ import { and, count, desc, eq, exists, gte, ilike, inArray, lte, or, sql } from 
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
+import { requireAdmin } from "@/lib/auth/session";
 import { ORDER_STATUSES } from "@/lib/constants";
 
 export type SalesFilter = {
@@ -12,6 +13,14 @@ export type SalesFilter = {
   productId?: string;
   from?: string;
   to?: string;
+};
+
+export type Paginated<T> = {
+  rows: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 };
 
 export type DashboardStats = {
@@ -45,6 +54,7 @@ export type CustomerRow = {
 };
 
 export async function getDashboardStats(): Promise<DashboardStats> {
+  await requireAdmin();
   const [revenueRow] = await db
     .select({ total: sql<number>`COALESCE(SUM(${schema.orders.total}), 0)`.mapWith(Number) })
     .from(schema.orders)
@@ -122,8 +132,27 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
-export async function listCustomers(search?: string): Promise<CustomerRow[]> {
+export async function listCustomers(
+  search?: string,
+  page = 1,
+  pageSize = 50,
+): Promise<Paginated<CustomerRow>> {
+  await requireAdmin();
   const term = search?.trim() ?? "";
+  const where = and(
+    eq(schema.users.role, "customer"),
+    term
+      ? or(
+          ilike(schema.users.name, `%${term}%`),
+          ilike(schema.users.email, `%${term.toLowerCase()}%`),
+        )
+      : undefined,
+  );
+
+  const [{ c: total }] = await db.select({ c: count() }).from(schema.users).where(where);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
   const users = await db
     .select({
       id: schema.users.id,
@@ -132,21 +161,14 @@ export async function listCustomers(search?: string): Promise<CustomerRow[]> {
       createdAt: schema.users.createdAt,
     })
     .from(schema.users)
-    .where(
-      and(
-        eq(schema.users.role, "customer"),
-        term
-          ? or(
-              ilike(schema.users.name, `%${term}%`),
-              ilike(schema.users.email, `%${term.toLowerCase()}%`),
-            )
-          : undefined,
-      ),
-    )
+    .where(where)
     .orderBy(desc(schema.users.createdAt))
-    .limit(300);
+    .limit(pageSize)
+    .offset((safePage - 1) * pageSize);
 
-  if (users.length === 0) return [];
+  if (users.length === 0) {
+    return { rows: [], total, page: safePage, pageSize, totalPages };
+  }
 
   const ids = users.map((u) => u.id);
   const orderAgg = await db
@@ -169,7 +191,7 @@ export async function listCustomers(search?: string): Promise<CustomerRow[]> {
   const orderMap = new Map(orderAgg.map((o) => [o.userId, o]));
   const downloadMap = new Map(downloadAgg.map((d) => [d.userId, d.c]));
 
-  return users.map((u) => ({
+  const rows = users.map((u) => ({
     id: u.id,
     name: u.name,
     email: u.email,
@@ -179,6 +201,7 @@ export async function listCustomers(search?: string): Promise<CustomerRow[]> {
     lastPurchaseAt: orderMap.get(u.id)?.lastPurchaseAt ?? null,
     downloadCount: downloadMap.get(u.id) ?? 0,
   }));
+  return { rows, total, page: safePage, pageSize, totalPages };
 }
 
 export type CustomerDetail = {
@@ -203,6 +226,7 @@ export type CustomerDetail = {
 };
 
 export async function getCustomerDetail(id: string): Promise<CustomerDetail | null> {
+  await requireAdmin();
   const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1);
   if (!user) return null;
 
@@ -268,7 +292,8 @@ function productExists(productId: string) {
   return exists(sub);
 }
 
-export async function listSales(filter: SalesFilter = {}): Promise<SalesRow[]> {
+export async function listSales(filter: SalesFilter = {}, page = 1, pageSize = 50): Promise<Paginated<SalesRow>> {
+  await requireAdmin();
   const conditions: (ReturnType<typeof eq> | ReturnType<typeof ilike> | ReturnType<typeof gte> | ReturnType<typeof lte> | ReturnType<typeof or> | ReturnType<typeof exists>)[] = [];
 
   const term = filter.q?.trim();
@@ -289,6 +314,16 @@ export async function listSales(filter: SalesFilter = {}): Promise<SalesRow[]> {
 
   const where = conditions.length ? and(...conditions) : undefined;
 
+  // El where puede referenciar emails/nombres de users (búsqueda por texto),
+  // así que el COUNT necesita el mismo JOIN a users que la query de filas.
+  const [{ c: total }] = await db
+    .select({ c: count() })
+    .from(schema.orders)
+    .innerJoin(schema.users, eq(schema.orders.userId, schema.users.id))
+    .where(where);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
   const orders = await db
     .select({
       id: schema.orders.id,
@@ -304,14 +339,15 @@ export async function listSales(filter: SalesFilter = {}): Promise<SalesRow[]> {
     .innerJoin(schema.users, eq(schema.orders.userId, schema.users.id))
     .where(where)
     .orderBy(desc(schema.orders.createdAt))
-    .limit(200);
+    .limit(pageSize)
+    .offset((safePage - 1) * pageSize);
 
   const orderIds = orders.map((o) => o.id);
   const items = orderIds.length
     ? await db.select().from(schema.orderItems).where(inArray(schema.orderItems.orderId, orderIds))
     : [];
 
-  return orders.map((o) => ({
+  const rows = orders.map((o) => ({
     ...o,
     customerName: o.customerName,
     customerEmail: o.customerEmail,
@@ -319,9 +355,11 @@ export async function listSales(filter: SalesFilter = {}): Promise<SalesRow[]> {
       .filter((i) => i.orderId === o.id)
       .map((i) => ({ productTitle: i.productTitleSnapshot, quantity: i.quantity, unitPrice: i.unitPrice })),
   }));
+  return { rows, total, page: safePage, pageSize, totalPages };
 }
 
 export async function listProductsForSales() {
+  await requireAdmin();
   return db
     .select({ id: schema.products.id, title: schema.products.title })
     .from(schema.products)

@@ -1,6 +1,6 @@
 "use server";
 
-import { desc, eq } from "drizzle-orm";
+import { count, desc, asc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -9,7 +9,7 @@ import * as schema from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/session";
 
 import { FILE_TYPES, PRODUCT_STATUSES, DEFAULT_LANDING_THEME, isLandingTheme } from "@/lib/constants";
-import { buildProductPackZip } from "@/lib/server/pack";
+import { buildProductPackZip, invalidateProductPackZip } from "@/lib/server/pack";
 import { storage } from "@/lib/server/storage";
 
 const priceSchema = z.preprocess(
@@ -61,7 +61,8 @@ const fileInputSchema = z.object({
     .array(
       z.object({
         name: z.string().trim().min(1).max(200),
-        description: z.string().trim().max(500).optional(),
+        // El cliente envía null cuando la descripción está vacía (`toMapPayload`).
+        description: z.string().trim().max(500).optional().nullable(),
         fileType: z.enum(FILE_TYPES).default("other"),
         mimeType: z.string().trim().max(120).optional().nullable(),
         sizeBytes: z.coerce.number().int().min(0).default(0),
@@ -89,6 +90,7 @@ export type ProductListResult = {
   theme: string;
   status: string;
   categoryId: string | null;
+  categoryName: string | null;
   coverImageUrl: string | null;
   shortDescription: string | null;
   createdAt: Date;
@@ -104,6 +106,7 @@ const listSelect = {
   theme: schema.products.theme,
   status: schema.products.status,
   categoryId: schema.products.categoryId,
+  categoryName: schema.categories.name,
   coverImageUrl: schema.products.coverImageUrl,
   shortDescription: schema.products.shortDescription,
   createdAt: schema.products.createdAt,
@@ -111,7 +114,34 @@ const listSelect = {
 } as const;
 
 export async function listProducts(): Promise<ProductListResult[]> {
-  return db.select(listSelect).from(schema.products).orderBy(desc(schema.products.createdAt));
+  return db
+    .select(listSelect)
+    .from(schema.products)
+    .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+    .orderBy(desc(schema.products.createdAt));
+}
+
+export async function listProductsPaginated(
+  page = 1,
+  pageSize = 50,
+): Promise<{
+  rows: ProductListResult[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}> {
+  const [{ c: total }] = await db.select({ c: count() }).from(schema.products);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const rows = await db
+    .select(listSelect)
+    .from(schema.products)
+    .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+    .orderBy(desc(schema.products.createdAt))
+    .limit(pageSize)
+    .offset((safePage - 1) * pageSize);
+  return { rows, total, page: safePage, pageSize, totalPages };
 }
 
 export async function getProduct(idOrSlug: string) {
@@ -144,6 +174,8 @@ export async function createProduct(input: unknown): Promise<{ ok: boolean; erro
     })
     .returning({ id: schema.products.id });
   revalidatePath("/admin/products");
+  revalidatePath("/admin/landing");
+  revalidatePath("/", "layout");
   return { ok: true, id: inserted[0].id };
 }
 
@@ -173,25 +205,76 @@ export async function updateProduct(id: string, input: unknown): Promise<{ ok: b
     })
     .where(eq(schema.products.id, id));
   revalidatePath("/admin/products");
+  revalidatePath("/admin/landing");
   revalidatePath("/", "layout");
   revalidatePath("/que-incluye");
   return { ok: true };
 }
 
-export async function deleteProduct(id: string): Promise<void> {
+export async function deleteProduct(id: string): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
+  const [withItems] = await db
+    .select({ id: schema.orderItems.id })
+    .from(schema.orderItems)
+    .where(eq(schema.orderItems.productId, id))
+    .limit(1);
+  if (withItems) {
+    return { ok: false, error: "No se puede eliminar: tiene pedidos asociados." };
+  }
+  const [withPurchases] = await db
+    .select({ id: schema.purchases.id })
+    .from(schema.purchases)
+    .where(eq(schema.purchases.productId, id))
+    .limit(1);
+  if (withPurchases) {
+    return { ok: false, error: "No se puede eliminar: tiene compras asociadas." };
+  }
+  const [withDownloads] = await db
+    .select({ id: schema.downloads.id })
+    .from(schema.downloads)
+    .where(eq(schema.downloads.productId, id))
+    .limit(1);
+  if (withDownloads) {
+    return { ok: false, error: "No se puede eliminar: tiene descargas registradas." };
+  }
+
+  const [product] = await db
+    .select({ zipKey: schema.products.zipKey })
+    .from(schema.products)
+    .where(eq(schema.products.id, id))
+    .limit(1);
+
   const files = await db
     .select({ storageKey: schema.productFiles.storageKey, storageProvider: schema.productFiles.storageProvider })
     .from(schema.productFiles)
     .where(eq(schema.productFiles.productId, id));
-  await db.delete(schema.productFiles).where(eq(schema.productFiles.productId, id));
-  await db.delete(schema.products).where(eq(schema.products.id, id));
+
+  await db.transaction(async (tx) => {
+    await tx.delete(schema.productFiles).where(eq(schema.productFiles.productId, id));
+    await tx.delete(schema.products).where(eq(schema.products.id, id));
+  });
+
+  const removedKeys = new Set<string>();
   for (const file of files) {
     if (file.storageProvider === "local") {
-      await storage.remove(file.storageKey);
+      await storage.remove(file.storageKey).catch(() => {});
+      removedKeys.add(file.storageKey);
     }
   }
+  if (product?.zipKey && !removedKeys.has(product.zipKey)) {
+    await storage.remove(product.zipKey).catch(() => {});
+  }
   revalidatePath("/admin/products");
+  return { ok: true };
+}
+
+export async function deleteProductAction(id: string, _formData: FormData): Promise<void> {
+  void _formData;
+  const result = await deleteProduct(id);
+  revalidatePath("/admin/products");
+  if (!result.ok) {
+    throw new Error(result.error ?? "No se pudo eliminar el producto.");
+  }
 }
 
 export async function saveProductFiles(id: string, input: unknown): Promise<{ ok: boolean; error?: string }> {
@@ -201,7 +284,7 @@ export async function saveProductFiles(id: string, input: unknown): Promise<{ ok
   }
   const parsed = fileInputSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues.map((e) => e.message).join("; ") };
+    return { ok: false, error: parsed.error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ") };
   }
   const fileRows = parsed.data.files.map((f) => ({
     productId: parsed.data.productId,
@@ -218,19 +301,96 @@ export async function saveProductFiles(id: string, input: unknown): Promise<{ ok
   }));
 
   const previous = await db
-    .select({ storageKey: schema.productFiles.storageKey, storageProvider: schema.productFiles.storageProvider })
+    .select({
+      id: schema.productFiles.id,
+      storageKey: schema.productFiles.storageKey,
+      storageProvider: schema.productFiles.storageProvider,
+    })
     .from(schema.productFiles)
     .where(eq(schema.productFiles.productId, id));
 
-  await db.delete(schema.productFiles).where(eq(schema.productFiles.productId, id));
-  await db.insert(schema.productFiles).values(fileRows);
-
+  const previousKeys = new Set(previous.map((p) => p.storageKey));
+  const previousById = new Map(previous.map((p) => [p.storageKey, p]));
   const activeKeys = new Set(fileRows.map((f) => f.storageKey));
-  for (const prev of previous) {
+
+  const toInsert = fileRows.filter((f) => !previousKeys.has(f.storageKey));
+  const toUpdate = fileRows.filter((f) => previousKeys.has(f.storageKey));
+  const toDrop = previous.filter((p) => !activeKeys.has(p.storageKey));
+
+  // Reemplazo completo dentro de una transacción: si el INSERT falla, el
+  // inventario anterior queda intacto (antes era delete+insert sin tx y una
+  // violación de FK perdía TODO el inventario del producto).
+  await db.transaction(async (tx) => {
+    if (toDrop.length > 0) {
+      const dropIds = toDrop.map((p) => p.id);
+      const used = await tx
+        .select({ fileId: schema.downloads.fileId })
+        .from(schema.downloads)
+        .where(inArray(schema.downloads.fileId, dropIds));
+      const usedIds = new Set(used.map((d) => d.fileId));
+      const hardDelete = toDrop.filter((p) => !usedIds.has(p.id)).map((p) => p.id);
+      const softDelete = toDrop.filter((p) => usedIds.has(p.id)).map((p) => p.id);
+      if (hardDelete.length > 0) {
+        await tx.delete(schema.productFiles).where(inArray(schema.productFiles.id, hardDelete));
+      }
+      if (softDelete.length > 0) {
+        // Con historial de descargas no se puede borrar (FK restrict): se
+        // desactiva la fila para conservar el registro y ocultarla.
+        await tx.update(schema.productFiles).set({ isActive: false }).where(inArray(schema.productFiles.id, softDelete));
+      }
+    }
+
+    for (const row of toUpdate) {
+      const prev = previousById.get(row.storageKey);
+      if (!prev) continue;
+      await tx
+        .update(schema.productFiles)
+        .set({
+          name: row.name,
+          description: row.description,
+          fileType: row.fileType,
+          mimeType: row.mimeType,
+          sizeBytes: row.sizeBytes,
+          storageProvider: row.storageProvider,
+          downloadLimit: row.downloadLimit,
+          groupId: row.groupId,
+          sortOrder: row.sortOrder,
+          isActive: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.productFiles.id, prev.id));
+    }
+
+    if (toInsert.length > 0) {
+      await tx.insert(schema.productFiles).values(
+        toInsert.map((f) => ({
+          productId: parsed.data.productId,
+          name: f.name,
+          description: f.description,
+          fileType: f.fileType,
+          mimeType: f.mimeType,
+          sizeBytes: f.sizeBytes,
+          storageKey: f.storageKey,
+          storageProvider: f.storageProvider,
+          downloadLimit: f.downloadLimit,
+          groupId: f.groupId,
+          sortOrder: f.sortOrder,
+        })),
+      );
+    }
+  });
+
+  // Limpieza del storage solo tras confirmar la transacción y solo para
+  // archivos locales que ya no pertenecen al producto.
+  for (const prev of toDrop) {
     if (prev.storageProvider === "local" && !activeKeys.has(prev.storageKey)) {
-      await storage.remove(prev.storageKey);
+      await storage.remove(prev.storageKey).catch(() => {});
     }
   }
+
+  // El contenido del pack cambió: invalida el ZIP para que se regenere bajo
+  // demanda (la ruta pack solo reconstruye si zipKey es null).
+  await invalidateProductPackZip(id);
 
   revalidatePath("/admin/products");
   return { ok: true };
@@ -242,7 +402,7 @@ export async function listProductFiles(productId: string): Promise<schema.Produc
     .select()
     .from(schema.productFiles)
     .where(eq(schema.productFiles.productId, productId))
-    .orderBy(desc(schema.productFiles.sortOrder));
+    .orderBy(asc(schema.productFiles.sortOrder));
 }
 
 export async function listProductFileGroups(productId: string): Promise<schema.ProductFileGroup[]> {
@@ -285,17 +445,31 @@ export async function renameProductFileGroup(
   await requireAdmin();
   const trimmed = name.trim().slice(0, 120);
   if (!trimmed) return { ok: false, error: "El nombre no puede estar vacío." };
+  const [group] = await db
+    .select({ productId: schema.productFileGroups.productId })
+    .from(schema.productFileGroups)
+    .where(eq(schema.productFileGroups.id, id))
+    .limit(1);
   await db
     .update(schema.productFileGroups)
     .set({ name: trimmed, updatedAt: new Date() })
     .where(eq(schema.productFileGroups.id, id));
+  // Cambia la estructura de carpetas del ZIP del pack.
+  if (group) await invalidateProductPackZip(group.productId);
   revalidatePath("/admin/products");
   return { ok: true };
 }
 
 export async function deleteProductFileGroup(id: string): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
+  const [group] = await db
+    .select({ productId: schema.productFileGroups.productId })
+    .from(schema.productFileGroups)
+    .where(eq(schema.productFileGroups.id, id))
+    .limit(1);
   await db.delete(schema.productFileGroups).where(eq(schema.productFileGroups.id, id));
+  // Cambia la estructura de carpetas del ZIP del pack.
+  if (group) await invalidateProductPackZip(group.productId);
   revalidatePath("/admin/products");
   return { ok: true };
 }

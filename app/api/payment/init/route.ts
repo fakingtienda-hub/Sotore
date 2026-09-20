@@ -4,6 +4,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { buildWompiCheckoutFields, getWompiConfig } from "@/lib/server/wompi";
+import { ownerMatchesOrder } from "@/lib/server/order-ownership";
+import { rateLimit } from "@/lib/server/rate-limit";
 import { serverEnv } from "@/lib/serverEnv";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +15,31 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // Rate limit por IP para mitigar enumeración de órdenes.
+  const ip =
+    (request.headers.get("x-forwarded-for") ?? "").split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown";
+  const limiter = rateLimit(`pay-init:${ip}`, 20, 60_000);
+  if (!limiter.ok) {
+    return Response.json(
+      { error: "Demasiadas peticiones. Intenta de nuevo en unos instantes." },
+      { status: 429, headers: { "Retry-After": String(limiter.retryAfter ?? 60) } },
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: "Parámetros inválidos." }, { status: 400 });
+  }
+
+  // El caller debe acreditar la titularidad de la orden (cookie de
+  // titularidad emitida al crearla). Evita consultar/iniciar el pago de las
+  // órdenes de otros (IDOR).
+  const ownsOrder = await ownerMatchesOrder(parsed.data.orderCode);
+  if (!ownsOrder) {
+    return Response.json({ error: "No tienes acceso a esa orden." }, { status: 403 });
   }
 
   const [order] = await db

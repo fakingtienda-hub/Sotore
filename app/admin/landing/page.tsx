@@ -9,6 +9,8 @@ import {
   type LandingSectionData,
 } from "@/types/landing";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Landing · Admin",
 };

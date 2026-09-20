@@ -283,7 +283,7 @@ function Viewer({ file }: { file: LibraryFileRow }) {
   if (m.startsWith("audio/") || (m !== "application/pdf" && !m.startsWith("video/") && !m.startsWith("image/") && (file.fileType ?? "").toLowerCase() === "audio")) {
     return <audio src={src} controls autoPlay className="w-full" />;
   }
-  if (m.startsWith("image/")) {
+  if (m.startsWith("image/") || ((file.fileType ?? "").toLowerCase() === "image" && !m.startsWith("video/") && !m.startsWith("audio/") && m !== "application/pdf")) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt={file.name} className="viewer-frame mx-auto" />;
   }

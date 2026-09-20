@@ -1,14 +1,22 @@
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils/format";
-import { listProducts } from "@/lib/server/actions/products";
-import { deleteProduct } from "@/lib/server/actions/products";
+import { listProductsPaginated } from "@/lib/server/actions/products";
+import { deleteProductAction } from "@/lib/server/actions/products";
+import { Pagination } from "@/app/admin/_components/pagination";
 
 export const metadata = {
   title: "Productos · Admin",
 };
 
-export default async function AdminProductsPage() {
-  const products = await listProducts();
+export default async function AdminProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page } = await searchParams;
+  const data = await listProductsPaginated(Number(page ?? 1) || 1);
+  const products = data.rows;
+  const href = (p: number) => `?page=${p}`;
 
   return (
     <div className="space-y-6">
@@ -81,7 +89,7 @@ export default async function AdminProductsPage() {
                     {formatPrice(product.price, product.currency)}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {product.categoryId ? "Categoría" : "—"}
+                    {product.categoryName ?? "—"}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
@@ -97,7 +105,7 @@ export default async function AdminProductsPage() {
                       >
                         Editar
                       </Link>
-                      <form action={deleteProduct.bind(null, product.id)}>
+                      <form action={deleteProductAction.bind(null, product.id)}>
                         <button
                           type="submit"
                           className="rounded border border-border px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
@@ -113,6 +121,7 @@ export default async function AdminProductsPage() {
           </table>
         </div>
       )}
+      <Pagination href={href} page={data.page} totalPages={data.totalPages} />
     </div>
   );
 }

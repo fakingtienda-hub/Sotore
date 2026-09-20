@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Fragment } from "react";
 
-import { getPublishedProductBySlug } from "@/lib/server/actions/checkout";
+import { getLandingShowcaseProduct } from "@/lib/server/actions/checkout";
 import { formatPrice } from "@/lib/utils/format";
 import { Reveal } from "@/components/storefront/reveal";
 import { Ticker } from "@/components/storefront/ticker";
@@ -403,7 +403,7 @@ function CtaSection({ data, product, site }: { data: LandingSectionData; product
   );
 }
 
-type HeroProduct = Awaited<ReturnType<typeof getPublishedProductBySlug>> | null;
+type HeroProduct = Awaited<ReturnType<typeof getLandingShowcaseProduct>> | null;
 
 const DETAIL_HREF = "/que-incluye";
 
@@ -422,9 +422,9 @@ export async function LandingSections({
   };
   const heroSlug = (hero?.content as { ctaProductSlug?: string } | undefined)?.ctaProductSlug;
   const featuredSlug = site.featuredProductSlug || heroSlug;
-  let product = featuredSlug ? await getPublishedProductBySlug(featuredSlug) : null;
+  let product = featuredSlug ? await getLandingShowcaseProduct(featuredSlug) : null;
   if (!product && heroSlug && heroSlug !== featuredSlug) {
-    product = await getPublishedProductBySlug(heroSlug);
+    product = await getLandingShowcaseProduct(heroSlug);
   }
 
   const renderers: Record<string, (d: LandingSectionData) => React.ReactNode> = {

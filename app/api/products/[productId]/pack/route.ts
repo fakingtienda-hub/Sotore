@@ -73,6 +73,7 @@ export async function GET(
   let stream;
   try {
     stream = storage.stream(product.zipKey);
+    (stream as NodeJS.ReadableStream).on("error", () => {});
   } catch (cause) {
     if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
       return Response.json({ error: "El pack no se encontró en almacenamiento." }, { status: 404 });

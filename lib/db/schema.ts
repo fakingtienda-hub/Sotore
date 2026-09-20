@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { bigint, boolean, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // Better Auth core tables (adapted to drizzle + snake_case columns)
@@ -103,8 +103,8 @@ export const products = pgTable(
     description: text("description"),
     coverImageUrl: text("cover_image_url"),
     galleryUrls: jsonb("gallery_urls").$type<string[]>(),
-    price: real("price").notNull().default(0),
-    compareAtPrice: real("compare_at_price"),
+    price: integer("price").notNull().default(0),
+    compareAtPrice: integer("compare_at_price"),
     currency: varchar("currency", { length: 3 }).notNull().default("COP"),
     theme: varchar("theme", { length: 20 }).notNull().default("costura"),
     status: varchar("status", { length: 20 }).notNull().default("draft"),
@@ -138,7 +138,10 @@ export const productFileGroups = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("product_file_groups_product_idx").on(t.productId)],
+  (t) => [
+    index("product_file_groups_product_idx").on(t.productId),
+    uniqueIndex("product_file_groups_product_name_uq").on(t.productId, t.name),
+  ],
 );
 
 export const productFiles = pgTable(
@@ -163,7 +166,10 @@ export const productFiles = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("product_files_product_idx").on(t.productId)],
+  (t) => [
+    index("product_files_product_idx").on(t.productId),
+    index("product_files_group_idx").on(t.groupId),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -179,12 +185,13 @@ export const orders = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
     status: varchar("status", { length: 20 }).notNull().default("pending"),
-    subtotal: real("subtotal").notNull().default(0),
-    discount: real("discount").notNull().default(0),
-    total: real("total").notNull().default(0),
+    subtotal: integer("subtotal").notNull().default(0),
+    discount: integer("discount").notNull().default(0),
+    total: integer("total").notNull().default(0),
     currency: varchar("currency", { length: 3 }).notNull().default("COP"),
     couponCode: varchar("coupon_code", { length: 60 }),
     couponId: uuid("coupon_id").references(() => coupons.id, { onDelete: "set null" }),
+    ownerToken: varchar("owner_token", { length: 64 }),
     gateway: varchar("gateway", { length: 30 }),
     gatewayReference: varchar("gateway_reference", { length: 120 }),
     gatewayStatus: varchar("gateway_status", { length: 40 }),
@@ -213,7 +220,7 @@ export const orderItems = pgTable(
       .notNull()
       .references(() => products.id, { onDelete: "restrict" }),
     productTitleSnapshot: varchar("product_title_snapshot", { length: 200 }).notNull(),
-    unitPrice: real("unit_price").notNull(),
+    unitPrice: integer("unit_price").notNull(),
     quantity: integer("quantity").notNull().default(1),
     currency: varchar("currency", { length: 3 }).notNull().default("COP"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -273,7 +280,7 @@ export const coupons = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     code: varchar("code", { length: 60 }).notNull(),
     type: varchar("type", { length: 15 }).notNull().default("percentage"),
-    value: real("value").notNull().default(0),
+    value: integer("value").notNull().default(0),
     maxUses: integer("max_uses"),
     usedCount: integer("used_count").notNull().default(0),
     productScope: jsonb("product_scope").$type<string[]>(),

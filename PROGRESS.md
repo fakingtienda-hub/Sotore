@@ -1,7 +1,64 @@
 # PROGRESS — punto de continuación
 
 > Usa este archivo para retomar el trabajo exactamente donde quedó.
-> Pregunta de retomas: "¿Qué sigue?" → 1) **verificar en el túnel la organización en carpetas por pack + ZIP "Descargar todo"** (crear carpetas en `/admin/products/[id]/files`, asignar archivos, generar el ZIP, y ver la biblioteca agrupada con el botón "Descargar todo (ZIP)"; recuerda: al cambiar archivos hay que pulsar "Regenerar ZIP") y 2) la **Fase 8 (Webhook + validación de pagos Wompi)** sigue siendo la única dependencia pendiente del camino de pago (faltan credenciales Wompi).
+> Pregunta de retomas: "¿Qué sigue?" → 1) **verificar en el túnel la organización en carpetas por pack + ZIP "Descargar todo"** (crear carpetas en `/admin/products/[id]/files`, asignar archivos, generar el ZIP, y ver la biblioteca agrupada con el botón "Descargar todo (ZIP)"; desde el 2026-09-20 el ZIP ya se invalida automáticamente al cambiar archivos/carpetas — "Regenerar ZIP" queda solo como opción manual) y 2) la **Fase 8 (Webhook + validación de pagos Wompi)** sigue siendo la única dependencia pendiente del camino de pago (faltan credenciales Wompi).
+
+## Limpieza: blobs huérfanos en storage + fix Zod "Invalid input: expected string, received null" — 2026-09-20
+
+> Pedido del usuario: "Limpialos" (refiriéndose a los **blobs huérfanos** acumulados por las subidas fallidas de archivos).
+- **Bug Zod (causa de los huérfanos)**: al cargar carpetas, `saveProductFiles` fallaba por archivo con "Invalid input: expected string, received null" — el payload envía `description: null` y `fileInputSchema` solo aceptaba `undefined`. Fix: `description: z.string().trim().max(500).optional().nullable()` (`lib/server/actions/products.ts`); el mensaje de error ahora incluye la **ruta** (p. ej. `files[3].description`). Verificado con payload replicado de 34 archivos (carpeta mixta, nulos) → parsea OK. `typecheck` ✓ · `lint` ✓.
+- **Limpieza de storage** (script temporal `Temp\opencode\cleanup-orphans.ts`): construye el set de claves legítimas desde la BD (`product_files.storageKey` + `products.coverImageUrl` sin prefijo `/api/files/` + `products.zipKey` + thumbs `products/{productId}/thumbs/{fileId}.png|jpg`) y borra con `storage.remove()` lo que no esté referenciado (modo dry-run primero).
+- **Resultado**: 1290 archivos en storage → **266 huérfanos borrados** (254 PDFs MDF del pack costura + 1 `.tmp` interrumpido + 4 png + 6 `cover-1.jpg` por slug + 1 webp). Tras borrar queda **1024 archivos = 1024 legítimos, 0 huérfanos** (todo lo que vive en disco está referenciado en BD; covers de los 2 productos vivos, en carpetas UUID, intactos). Sin riesgo: la BD solo tiene productos `amigurumis` y `pack-costura-pro`, y el código runtime sirve covers vía `products.coverImageUrl`, jamás rutas fijas por slug.
+- **Para mantener limpio**: si vuelve a fallar un guardado masivo, correr el mismo script (borra blobs no referenciados de forma segura; los archivos subidos correctamente YA quedan enlazados y NO se tocan).
+
+## REGLA: imagen del producto + tamaño de precio iguales en todos los temas — 2026-09-19
+
+- Pedido del usuario: "Independiente del tema seleccionado, el producto debe mostrar la imagen cargada, y el tamaño del precio debe ser el mismo para todos. La base: el tema premium." **Aclaración posterior**: la POSICIÓN del precio ya era correcta → NO se modifica la etiqueta/posición de ningún tema; premium NO se toca. Solo se toma de premium el TAMAÑO del precio.
+- `app/storefront.css` `.sf-ticket`: se restauró el bloque base **exactamente como estaba** (etiqueta cosida: fondo `--sf-tag`, padding, rotación `-2deg`, `translate 0 -50px`, kicker/notas visibles) y solo se cambió el tamaño del precio al de premium: `tag-price font-size: clamp(3rem,10vw,5.5rem)` (88px), móvil `clamp(3.3rem,17.35vw,5.5rem)`, horizontal `clamp(2.42rem,8.08vw,4.44rem)`. El bloque premium (161-272) quedó **intacto**.
+- Causa de la imagen ausente: el hero solo resolvía productos **publicados** (`getPublishedProductBySlug`), y el destacado estaba en **borrador** → no imagen ni precio. Fix: nuevo `getLandingShowcaseProduct` en `lib/server/actions/checkout.ts` (lookup por slug SIN gate de publicado, misma regla que el tema: la elección del admin manda). `landing-sections.tsx` lo usa para el hero + CTA. Comprar sí exige publicado.
+- **Verificado** (Playwright 1280px, destacado amigurumis/tema amigurumi vs pack-costura-pro/tema premium): etiqueta cosida restaurada en amigurumi (fondo blanco + rotación `matrix(0.999,-0.0349,...)` + `translate -50`), premium intacto (transparente), precio 88px en AMBOS, imagen cargada y visible en ambos. `typecheck` ✓ · `lint` ✓. Estado dejado: `featured=amigurumis`.
+
+## REGLA: el tema lo define el PRODUCTO, la landing solo lo muestra — 2026-09-19
+
+- Modelo confirmado por el usuario: "La landing no define el tema. Al crear el producto se carga el tema de preferencia; la landing solo elige a mostrar, con el tema seleccionado inicialmente. El cual puede cambiarse."
+- `lib/server/landing-theme.ts`: eliminado el **fallback a otro producto** (usaba el `ctaProductSlug` del bloque hero si no había destacado). Ahora el tema mostrado es SIEMPRE el del producto elegido para vitrina (`featuredProductSlug`); sin producto destacado → `DEFAULT_LANDING_THEME`. La landing jamás escribe un tema.
+- Cambiar el tema posteriormente en el producto YA se refleja: `updateProduct` revalida `"/" layout` (products.ts:208).
+- **Verificado** (dev): cambiar tema de `pack-costura-pro` a amigurumi → `/` cambia al instante; sin producto destacado → `/` = costura (por defecto, ya NO el tema de otro producto escondido); restaurado → premium. `typecheck` ✓ · `lint` ✓.
+
+## BUG: el texto principal del hero seguía mostrando "AMIGURUMIS" al cambiar el producto destacado — 2026-09-19
+
+> Reporte: "Selecciono el producto (Patrones Premium), pero en el texto principal sigue apareciendo amigurumis".
+- **Causa raíz**: el h1 y subtítulo del hero son **texto propio almacenado** en `landing_blocks` (columna hero `title`="PACK AMIGURUMIS", `subtitle` sobre amigurumis) y NO derivan del producto. El producto destacado solo controlaba tema/precio/portada/botón; el titular quedaba viejo al cambiar de producto.
+- **Fix (`lib/server/actions/landing.ts` `saveLandingSection`)**: al **CAMBIAR** `featuredProductSlug` en la sección `site`, el hero se sincroniza automáticamente: `title` = nombre del producto, `subtitle` = su descripción corta (`shortDescription`; si no, conserva la anterior). Si NO cambia el producto, el texto manual del hero se conserva intacto (los campos "Título/Subtítulo" del hero siguen siendo editables y tienen prioridad hasta que cambies de producto).
+- **Verificado con navegador (sesión admin)**: crear "Patrones Premium" (tema crochet + descripción corta) → elegirlo destacado → `hero.title` PASA a "Patrones Premium" y el h1 público cambia (deja de decir AMIGURUMIS) + subtítulo = descripción corta + theme crochet aplicado. ALL PASS.
+- **Estado datos dejado coherente**: hero sincronizado con el destacado actual (`featured=pack-costura-pro`) → la `/` muestra "Pack Costura Pro" (antes decía "PACK AMIGURUMIS").
+- **Verificado**: `npm run typecheck` ✓ · `npm run lint` ✓.
+
+## REVISIÓN: tema del producto al crear + elegirlo en la landing — 2026-09-19
+
+> Reporte del usuario: "al crear un nuevo producto debería elegir el tema que quiera, guardarse y aplicarse de inmediato; luego en la sección landing debe dejar elegir el producto con el tema seleccionado; no está funcionando".
+- **Verificación automática (Playwright, sesión admin real vía magic-link)**: el flujo **funciona de punta a punta en dev** — crear producto con tema `crochet` → guardado (BD) → aparece en el select "Producto destacado (estelar)" de `/admin/landing` con su tema ("… · tema Crochet de lino") → al seleccionarlo la `/` pública aplica `data-sf-theme="crochet"` de inmediato → cambiar el tema desde la ficha (`/admin/products/[id]`, autosave) también se refleja al instante (`premium`) y el checkout del producto usa su propio tema. (Script temporal `Temp\opencode\theme_ui_test.mjs`; sesión admin mintida vía verificación de magic-link como `setBuyerSessionCookie`.)
+- **Sesión admin**: la inyección directa en `sessions` (token random) **no la reconoce better-auth** (get-session null) — hay que crear la verificación + consumir `/api/auth/magic-link/verify` para que better-auth genere la sesión y devuelva la cookie `fakingstore.session_token`. Queda anotado por si hace falta saltar el login en pruebas.
+- **Hueco de caché en producción (fix real)**: `/admin/landing` era **estática** (sin `dynamic`) y `createProduct`/`updateProduct` NO la revalidaban → en un build publicado, un producto recién creado **no aparecía** en el select y un tema editado podía quedar viejo hasta que se guardara alguna sección de la landing.
+  - `lib/server/actions/products.ts`: `createProduct` ahora también revalida `/admin/landing` y `"/", "layout"`; `updateProduct` revalida además `/admin/landing`.
+  - `app/admin/landing/page.tsx`: `export const dynamic = "force-dynamic"` (siempre lee productos/landing frescos, sin caché estática).
+- **Verificado**: `npm run typecheck` ✓ · `npm run lint` ✓ · re-ejecución del flujo UI ALL PASS ✓.
+- **Pendiente**: si el usuario sigue viendo el fallo, confirmar en qué entorno (dev local vs build publicado) y el paso exacto; la causa más probable en dev es el **dev server sin reiniciar** (env/caché vieja).
+
+## Endurecimiento de seguridad pago/biblioteca + test E2E del flujo demo — 2026-09-19
+
+> Sesión de auditoría (fases de seguridad) + verificación de punta a punta del flujo demo con Playwright. Todo en verde salvo lo que depende de credenciales Wompi (fase 8).
+- **IDOR en payment/init** (`app/api/payment/init/route.ts`): la orden ahora se verifica con `ownerMatchesOrder` (cookie `fakingstore.order_token.{code}` == `owner_token`; si no hay token registrado, se emite y la cookie se re-escribe auto-curando el legado) → 403 "No tienes acceso a esa orden." para ajenos. Además **rate limit** por IP `pay-init:{ip}` 20/60s → 429 con `Retry-After`. `setOrderTokenCookie` pasó a async y se espera en los 3 callers (`createPendingOrder`, legacy de `ownerMatchesOrder`, checkout).
+- **Cupón SOLO al aprobar** (`lib/server/actions/checkout.ts`): `createPendingOrder` ya NO consume el cupón (queda comentario); el consumo quedó solo en `claimCouponForApprovedOrder` (idempotente por `couponUsages.orderId`, incremento atómico con guard `maxUses`), llamado en webhook y demo. `releaseCouponForOrder` para estados terminales tras approved. **Verificado**: usedCount sube EXACTAMENTE +1 con orden pendiente sin tocar el cupón.
+- **Files transaccionales** (`lib/server/actions/products.ts`): `saveProductFiles` ejecuta todo en una tx (hard-delete filas sin historial en `downloads`, soft-delete `isActive=false` si hay historial, update in-place por storageKey, insert de nuevas, limpieza de storage local tras commit). `deleteProduct` con checks de orderItems/purchases/downloads (errores en español) + tx + limpieza de storage y del ZIP.
+- **Filtro `isActive=true`** en rutas `download`, `view`, `thumb` (pack ya lo tenía vía `buildProductPackZip`): un archivo desactivado no se puede descargar/ver.
+- **Límite de descargas atómico** (`app/api/files/[fileId]/download/route.ts`): con `downloadLimit` se toma `pg_advisory_xact_lock(hashtext('dl:{userId}:{fileId}'))` y el count+insert van en la misma tx (sin carreras). La fila de `downloads` se inserta SOLO tras `storage.get` exitoso. IP truncada a 45 (`varchar(45)`, migración 0004 aplicada al dev DB).
+- **Streams**: listeners no-op `.on("error", …)` en `view` (2 sitios) y `pack` (1) para evitar errores sin crash.
+- **Webhook** (`app/api/webhooks/wompi/route.ts`): con `WOMPI_EVENTS_SECRET` vacío responde 503 "desactivado" (estado por diseño); el path de firma HMAC-SHA256 hex (`x-event-signature`) caza 401 para firmas ausentes/inválidas una vez configurado el secret.
+- **Fixture `scripts/fase9-fixture.ts`**: `demo-patron.pdf` ahora se asigna a un grupo ("Patrones de prueba") — la biblioteca SOLO lista archivos con `groupId != null`, sin grupo el archivo era invisible aun activo.
+- **Verificación E2E** (`Temp\opencode\fase14_test.mjs` + `scripts/fase14-verify.ts --pre/--check`, idempotente y con limpieza BD): comprador1 guest → `/checkout/pack-costura-pro` → orden FS- → payment/init dueño 200 + `configured:false` (sin `WOMPI_INTEGRITY_SECRET`) → "Simular pago aprobado (demo)" → auto-login a `/library` → `/library/pack-costura-pro` → **descarga `demo-patron.pdf` registrada**; intruso sin cookie: payment/init 403; webhook sin secret 503; comprador2: orden **pending sin entitlements ni cupón consumido**; comprador3: cupón WELCOME10 → **approved + 1 usage + usedCount +1 exacto**. → **ALL PASS**.
+- **NOTAS entorno**: `.env.local` tiene `WOMPI_EVENTS_SECRET=` y las keys de Wompi VACÍAS (por eso demo `configured:false` y webhook 503). Navegador Playwright: binarios rev 1234 → el test lanza chromium con `executablePath` apuntando a `ms-playwright\chromium-1234\chrome-win64\chrome.exe`.
+- **Verificado**: `npm run typecheck` ✓ · `npm run lint` ✓ · E2E ALL PASS ✓.
 
 ## Auto-login tras pago demo (sin depender del magic link por consola) + biblioteca para productos en draft — 2026-09-18
 
@@ -323,3 +380,44 @@ Pendientes/consideraciones (decidir al retomar):
 3. Limpiar scripts temporales del repo y `Temp\opencode` según corresponda; dejar BD y `storage/` limpios salvo demo data intencional.
 4. `npm run typecheck` + `npm run lint` + `npm run build` (build completo y comprobar `EXIT=0`).
 5. Actualizar la tabla de fases en `README.md` (marcar la fase completada con ✓).
+## Fase 13 (reparaci�n arquitectura) � completa
+
+> Revisi�n pedida por el usuario ("revisa la arquitectura y encuentra fallas de funcionamiento"). Plan de 4 fases aprobado: 1=seguridad cr�tica, 2=dato/l�gica, 3=producci�n, 4=pulido. Todo implementado y verificado (typecheck+lint limpios).
+
+### Fase 1 � Seguridad cr�tica
+- AUTH_SECRET: `.env.example` documenta `CHANGE_ME_openssl_rand_base64_32`; `lib/serverEnv.ts` lanza si < 32 chars.
+- Login: redirecci�n por rol (admin?`/admin`, cliente?`/library`) con cast seguro del `role` (better-auth no expone `role` en los tipos de cliente).
+- `checkout.ts`: parsing robusto del Set-Cookie de compra (decodeURIComponent en try/catch, strip de comillas, prefijo `fakingstore` validado antes de parsear).
+
+### Fase 2 � Dato/l�gica
+- `library/page.tsx`: filtro efectivo `purchases.status = 'active'` (antes `grantedAt != null` era no-op).
+- `deleteProduct`: pre-chequea ordenes/stocks (`orderItems`) y devuelve error amigable en vez de violar FK; `deleteProductAction` para form actions.
+- `types/index.ts` eliminado (c�digo muerto, desconectado del schema).
+
+### Fase 3 � Producci�n
+- **Webhook Wompi real** (`app/api/webhooks/wompi/route.ts`): verifica `x-event-signature` (HMAC-SHA256 hex del raw body con `WOMPI_EVENTS_SECRET`; 503 si sin secret, 401 si inv�lida). Procesa `transaction.updated`: APPROVED? `orders.approved` + `grantOrderEntitlements` + email + revalidate; DECLINED/VOIDED/ERROR? estado terminal. Idempotente (200 para orden desconocida/ya procesada, sin reintentos infinitos).
+- **Rate limiting** (`lib/server/rate-limit.ts`, ventana fija en memoria): `/download` 30 req/min por usuario+archivo (429 con Retry-After); `/view` 300 req/min por usuario (global, para no romper streaming por rangos).
+- **Paginaci�n**: `listCustomers`, `listSales`, `listProductsPaginated` devuelven `{rows,total,page,pageSize,totalPages}`; `app/admin/_components/pagination.tsx`; p�ginas admin de clientes/ventas/productos con `searchParams.page` y navegaci�n Anterior/Siguiente preservando filtros. `listProducts()` intacta para el editor de landing.
+
+### Fase 4 � Pulido
+- Columna "Categor�a" en admin/products muestra el **nombre real** (`leftJoin categories`, campo `categoryName` en `ProductListResult`).
+- �ndices: `product_files_group_idx` y �nico `product_file_groups_product_name_uq` (previene grupos duplicados por producto). Migraci�n `0003_soft_red_shift.sql` generada (incluye columnas `zip_*` para instalaci�n fresca; en la BD existente aplicar `CREATE INDEX`/`CREATE UNIQUE INDEX` idempotentes). ? �La BD dev no fue alcanzable (auth fall� con DATABASE_URL de `.env.local`) � aplicar DDL manualmente.
+- Viewer (`files-list.tsx`): fallback por `fileType` para **imagen** (ya exist�a para video/audio/pdf); `/view` prioriza MIME real derivado por extensi�n cuando el guardado es gen�rico (`application/octet-stream`/`text/plain`).
+- `services/` (andamiaje vac�o con .gitkeep) eliminado; README actualizado (la l�gica real vive en `lib/server/`).
+
+### Ejecuci�n
+- typecheck: `npx tsc --noEmit` OK � lint: `npm run lint` OK � migraci�n generada con `npm run db:generate`.
+
+## Revisi�n carga e indexaci�n de archivos (video/PDF) — 2026-09-20
+
+> Revisi�n pedida por el usuario del flujo completo (subida → DB → vistas → descargas → ZIP) pensando en que los productos llevar�n **videos y PDFs**. Fixes 1-6 aplicados; solo reporte para el tema 7 (thumbnails de video). Unidad: `1+2+5+6` + `4` + `3` (elegidas), excluida `7`.
+
+- **Fix 1 — Descargas por streaming** (`app/api/files/[fileId]/download/route.ts`): antes `storage.get()` cargaba TODO el archivo en memoria y respond�a `new Uint8Array(...)` (riesgo OOM con videos). Ahora `storage.stat` (para 404+Content-Length) + `storage.stream()` + `Readable.toWeb`, igual que `view`/`pack`. La contabilidad de `downloads`/l�mite se hace antes de servir y no consume archivos fallidos.
+- **Fix 2 — ZIP del pack ya no queda stale** (`lib/server/pack.ts` → `invalidateProductPackZip`; `lib/server/actions/products.ts`): cambiar archivos/carpetas (saveProductFiles, rename/delete group) ahora borra el `pack.zip` cacheado y deja `zipKey=null` para que la ruta pack lo regenere bajo demanda. "Regenerar ZIP" queda como opci�n manual.
+- **Fix 3 — Subida por streaming** (`app/api/files/upload/route.ts` + `lib/server/storage.ts::putStream`): se a�adi� dependencia **`@fastify/busboy@3.2.2`**. El multipart se parsea en streaming y el archivo se vuelca a disco sin `formData()` + `arrayBuffer()` (pico de RAM de ~2x el archivo). L�mite `STORAGE_MAX_FILE_BYTES` (default 512MB) aplicado dentro de `putStream` (aborta con storage code `LIMIT` → 413; escrito a `.tmp` y renombrado, at�mico, sin residuos). El cliente admin NO cambia (sigue enviando FormData).
+- **Fix 4 — ZIP del pack sin full-buffer** (`lib/server/pack.ts`): se vuelca el zip a storage por `putStream(createReadStream(...))` (era `readFile` entero en memoria, OOM con muchos videos). Adem�s `store:true` (copiado sin comprimir) para video/audio/imagen/zip ya comprimidos; solo PDF/otros se deflatean (`level 9`).
+- **Fix 5 — Bypass admin en view/download** (`view/route.ts`, `download/route.ts`): admins pueden probar streaming/descarga sin compra (igual que `thumb`/`pack`); la contabilidad de descargas se omite para admins y `purchase?.grantedAt` evita crash. La admin "Probar descarga" del gestor (`/api/files/{storageKey}`) tambi�n pas� a streaming (`[...key]/route.ts`).
+- **Fix 6 — Orden de archivos en admin** (`products.ts::listProductFiles`): `orderBy asc(sortOrder)` (antes `desc`), consistente con la librer�a y el ZIP.
+- **Tema 7 (no aplicado):** los videos NO tienen miniatura (`thumbs.ts` solo PDF/imagen) → la biblioteca muestra el �cono gen�rico. Requerir�a ffmpeg en subida para generar car�tulas.
+- **Verificado:** typecheck ✓ lint ✓. Prueba funcional (script con login admin + subida multipart real al dev server + relectura por `[...key]`): upload 200 (mime `application/pdf`, bytes exactos), lectura 200 con Content-Length correcto, limpieza OK. Unidad de streaming de `putStream` probada (4MB ok; l�mite de 1KB → `LIMIT` sin archivo residual).
+- Dependencia nueva: `@fastify/busboy` en `package.json`.

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -22,12 +22,12 @@ export default async function LibraryPage() {
       currency: schema.products.currency,
       price: schema.products.price,
     })
-    .from(schema.purchases)
-    .innerJoin(schema.products, eq(schema.purchases.productId, schema.products.id))
-    .where(eq(schema.purchases.userId, user.id))
-    .orderBy(desc(schema.purchases.grantedAt));
+   .from(schema.purchases)
+     .innerJoin(schema.products, eq(schema.purchases.productId, schema.products.id))
+     .where(and(eq(schema.purchases.userId, user.id), eq(schema.purchases.status, "active")))
+     .orderBy(desc(schema.purchases.grantedAt));
 
-  const active = purchases.filter((p) => p.grantedAt != null);
+   const active = purchases;
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 md:px-8">

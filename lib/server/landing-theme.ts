@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { DEFAULT_LANDING_THEME, isLandingTheme, type LandingTheme } from "@/lib/constants";
-import { getLandingSiteConfig, getPublishedLanding } from "@/lib/server/actions/landing";
+import { getLandingSiteConfig } from "@/lib/server/actions/landing";
 
 export async function getLandingTheme(): Promise<LandingTheme> {
   const site = await getLandingSiteConfig();
@@ -19,12 +19,10 @@ export async function getLandingTheme(): Promise<LandingTheme> {
     return product && isLandingTheme(product.theme) ? product.theme : null;
   };
 
+  // La landing jamás define un tema propio: muestra el del producto elegido
+  // para vitrina (el que se fijó al crear/editar el producto). Si no hay
+  // producto destacado se usa el tema por defecto, NO el de otro producto
+  // escondido en un bloque (antes había un fallback a ctaProductSlug).
   const featured = await resolve(featuredSlug);
-  if (featured) return featured;
-
-  const landing = await getPublishedLanding();
-  const heroSlug = (landing.find((s) => s.section === "hero")?.content as { ctaProductSlug?: string } | undefined)
-    ?.ctaProductSlug;
-  const hero = await resolve(heroSlug);
-  return hero ?? DEFAULT_LANDING_THEME;
+  return featured ?? DEFAULT_LANDING_THEME;
 }

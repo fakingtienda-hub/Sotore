@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
+import { requireAdmin } from "@/lib/auth/session";
 import { COUPON_TYPES } from "@/lib/constants";
 
 const couponSchema = z
@@ -33,10 +34,12 @@ const couponSchema = z
   });
 
 export async function listCoupons() {
+  await requireAdmin();
   return db.select().from(schema.coupons).orderBy(desc(schema.coupons.createdAt));
 }
 
 export async function listProductsForCoupons() {
+  await requireAdmin();
   return db
     .select({ id: schema.products.id, title: schema.products.title, slug: schema.products.slug, price: schema.products.price })
     .from(schema.products)
@@ -44,6 +47,7 @@ export async function listProductsForCoupons() {
 }
 
 export async function saveCoupon(input: unknown): Promise<{ ok: boolean; error?: string; id?: string }> {
+  await requireAdmin();
   const parsed = couponSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((e) => e.message).join("; ") };
@@ -87,6 +91,7 @@ export async function saveCoupon(input: unknown): Promise<{ ok: boolean; error?:
 }
 
 export async function toggleCouponStatus(id: string): Promise<{ ok: boolean }> {
+  await requireAdmin();
   const [coupon] = await db.select().from(schema.coupons).where(eq(schema.coupons.id, id)).limit(1);
   if (!coupon) return { ok: false };
   const next = coupon.status === "active" ? "disabled" : "active";
@@ -96,6 +101,7 @@ export async function toggleCouponStatus(id: string): Promise<{ ok: boolean }> {
 }
 
 export async function deleteCoupon(id: string): Promise<{ ok: boolean }> {
+  await requireAdmin();
   const used = await db
     .select({ id: schema.orders.id })
     .from(schema.orders)

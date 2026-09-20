@@ -131,10 +131,14 @@ export async function saveLandingSection(
   }
 
   const existing = await db
-    .select({ id: schema.landingBlocks.id })
+    .select({ id: schema.landingBlocks.id, content: schema.landingBlocks.content })
     .from(schema.landingBlocks)
     .where(eq(schema.landingBlocks.section, sectionKey))
     .limit(1);
+  const prevFeatured =
+    sectionKey === "site"
+      ? ((existing[0]?.content as Record<string, unknown> | undefined)?.featuredProductSlug as string | undefined)
+      : undefined;
 
   const values = {
     title: parsed.data.title,
@@ -155,6 +159,47 @@ export async function saveLandingSection(
       section: sectionKey,
       sortOrder: LANDING_SECTIONS.indexOf(sectionKey),
     });
+  }
+
+  // Al CAMBIAR el producto destacado, el texto principal del hero lo sigue
+  // (título = nombre del producto, subtítulo = su descripción corta). Si no
+  // cambia el producto, el texto manual del hero se conserva tal cual.
+  if (sectionKey === "site") {
+    const newFeatured = (contentResult.data as { featuredProductSlug?: string }).featuredProductSlug;
+    if (newFeatured && newFeatured !== prevFeatured) {
+      const [feat] = await db
+        .select({ title: schema.products.title, shortDescription: schema.products.shortDescription })
+        .from(schema.products)
+        .where(eq(schema.products.slug, newFeatured))
+        .limit(1);
+      if (feat) {
+        const heroHero = await db
+          .select({ id: schema.landingBlocks.id, subtitle: schema.landingBlocks.subtitle })
+          .from(schema.landingBlocks)
+          .where(eq(schema.landingBlocks.section, "hero"))
+          .limit(1);
+        const heroSubtitle = feat.shortDescription?.trim() ? feat.shortDescription : (heroHero[0]?.subtitle ?? "");
+        const heroValues = {
+          title: feat.title,
+          subtitle: heroSubtitle,
+          updatedAt: new Date(),
+        };
+        if (heroHero.length > 0) {
+          await db
+            .update(schema.landingBlocks)
+            .set(heroValues)
+            .where(eq(schema.landingBlocks.id, heroHero[0].id));
+        } else {
+          await db.insert(schema.landingBlocks).values({
+            ...heroValues,
+            section: "hero",
+            content: {},
+            isPublished: true,
+            sortOrder: LANDING_SECTIONS.indexOf("hero"),
+          });
+        }
+      }
+    }
   }
 
   revalidatePath("/", "layout");

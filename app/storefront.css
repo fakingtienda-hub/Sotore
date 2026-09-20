@@ -629,9 +629,17 @@
 .sf-ticket .tag-price {
   font-family: var(--sf-title-font, var(--font-poster), sans-serif);
   font-weight: var(--sf-title-weight, 400);
-  font-size: 2.2rem;
+  font-size: clamp(3rem, 10vw, 5.5rem);
   line-height: 1;
   color: var(--sf-tag-ink);
+}
+
+/* Movil: mismo tamano que premium (precio uniforme), la POSICION no cambia
+   (la etiqueta conserva sus anclas originales). */
+@media (max-width: 639px) {
+  .sf-ticket .tag-price {
+    font-size: clamp(3.3rem, 17.35vw, 5.5rem);
+  }
 }
 
 .sf-ticket .tag-note {
@@ -1320,7 +1328,7 @@
 
   /* Precio 5% MÃS pequeÃ±o aÃºn en horizontal (1.87rem Ã— 0.95 = 1.7765). */
   #hero .sf-ticket .tag-price {
-    font-size: 1.78rem; /* base: 2.2rem Ã— 0.85 Ã— 0.95 */
+    font-size: clamp(2.42rem, 8.08vw, 4.44rem); /* base: 2.2rem Ã— 0.85 Ã— 0.95 */
   }
 
   /* Precio premium en horizontal: clamp(3rem,10vw,5.5rem) Ã— 0.85 Ã— 0.95 â†' clamp(2.42rem,8.08vw,4.44rem). */

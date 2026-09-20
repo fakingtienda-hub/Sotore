@@ -7,19 +7,17 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 
 /**
- * Fase 9 — Entrega automática.
- *
- * Concede acesso a los productos de una orden aprobada creando las filas de
- * `purchases` (una por ítem). Es idempotente: si el usuario ya tiene una compra
- * activa del mismo producto, la reactiva sin duplicar (índice único
- * `purchases_user_product_idx`).
- *
- * Lo usan tanto la aprobación vía webhook de Wompi (Fase 8) como la simulación
- * demo (Fase 7), de modo que la entrega siempre corra por el mismo camino.
+ * Garantiza el acceso a los productos de una orden aprobada (una fila por
+ * ítem en `purchases`). Es idempotente y NO reinicia el reloj de
+ * `minMinutesAfterPayment` de compras ya activas: solo crea las filas
+ * faltantes (o reactiva las revocadas). Lo usan la aprobación vía webhook,
+ * sus reintentos y la simulación demo, de modo que la entrega siempre corre
+ * por el mismo camino.
  */
-export async function grantOrderEntitlements(orderId: string): Promise<{
+export async function ensureOrderEntitlements(orderId: string): Promise<{
   ok: boolean;
   granted: number;
+  existing: number;
   reason?: string;
 }> {
   const [order] = await db
@@ -29,10 +27,10 @@ export async function grantOrderEntitlements(orderId: string): Promise<{
     .limit(1);
 
   if (!order) {
-    return { ok: false, granted: 0, reason: "La orden no existe." };
+    return { ok: false, granted: 0, existing: 0, reason: "La orden no existe." };
   }
   if (order.status !== "approved") {
-    return { ok: false, granted: 0, reason: "La orden no está aprobada." };
+    return { ok: false, granted: 0, existing: 0, reason: "La orden no está aprobada." };
   }
 
   const items = await db
@@ -41,7 +39,23 @@ export async function grantOrderEntitlements(orderId: string): Promise<{
     .where(eq(schema.orderItems.orderId, order.id));
 
   let granted = 0;
+  let existing = 0;
   for (const item of items) {
+    const active = await db
+      .select({ id: schema.purchases.id })
+      .from(schema.purchases)
+      .where(
+        and(
+          eq(schema.purchases.userId, order.userId),
+          eq(schema.purchases.productId, item.productId),
+          eq(schema.purchases.status, "active"),
+        ),
+      )
+      .limit(1);
+    if (active.length > 0) {
+      existing += 1;
+      continue;
+    }
     await db
       .insert(schema.purchases)
       .values({
@@ -59,7 +73,7 @@ export async function grantOrderEntitlements(orderId: string): Promise<{
   }
 
   revalidatePath("/library");
-  return { ok: true, granted };
+  return { ok: true, granted, existing };
 }
 
 /**

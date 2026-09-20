@@ -1,5 +1,6 @@
 import { listProductsForSales, listSales } from "@/lib/server/actions/crm";
 import { SalesFilters } from "./_components/sales-filters";
+import { Pagination } from "@/app/admin/_components/pagination";
 import { formatDate, formatPrice } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ function first(items: string | string[] | undefined): string | undefined {
 export default async function AdminSalesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; productId?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; productId?: string; from?: string; to?: string; page?: string }>;
 }) {
   const sp = await searchParams;
   const filter = {
@@ -39,7 +40,22 @@ export default async function AdminSalesPage({
     to: first(sp.to),
   };
 
-  const [sales, products] = await Promise.all([listSales(filter), listProductsForSales()]);
+  const [salesData, products] = await Promise.all([
+    listSales(filter, Number(sp.page ?? 1) || 1),
+    listProductsForSales(),
+  ]);
+  const sales = salesData.rows;
+
+  const href = (p: number) => {
+    const params = new URLSearchParams();
+    if (filter.q) params.set("q", filter.q);
+    if (filter.status) params.set("status", filter.status);
+    if (filter.productId) params.set("productId", filter.productId);
+    if (filter.from) params.set("from", filter.from);
+    if (filter.to) params.set("to", filter.to);
+    params.set("page", String(p));
+    return `?${params.toString()}`;
+  };
 
   return (
     <div>
@@ -105,6 +121,7 @@ export default async function AdminSalesPage({
           </table>
         </div>
       )}
+      <Pagination href={href} page={salesData.page} totalPages={salesData.totalPages} />
     </div>
   );
 }

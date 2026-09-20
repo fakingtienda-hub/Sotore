@@ -39,13 +39,15 @@ export function LoginForm() {
     setStatus("loading");
     setError("");
     try {
-      const { error: apiError } = await signIn.email({ email, password });
+      const { data, error: apiError } = await signIn.email({ email, password });
       if (apiError) {
         setStatus("error");
         setError(apiError.message ?? "Credenciales inválidas.");
         return;
       }
-      router.push(nextParam ?? "/admin");
+      const role = (data?.user as { role?: string } | undefined)?.role ?? "customer";
+      const defaultRedirect = role === "admin" ? "/admin" : "/library";
+      router.push(nextParam ?? defaultRedirect);
     } catch (err) {
       setStatus("error");
       setError(err instanceof Error ? err.message : "Credenciales inválidas.");

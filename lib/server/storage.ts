@@ -1,6 +1,8 @@
-import { createReadStream } from "node:fs";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { Transform } from "node:stream";
 
 import { serverEnv } from "@/lib/serverEnv";
 
@@ -40,7 +42,8 @@ export class StorageError extends Error {
     readonly code:
       | "NOT_FOUND"
       | "FORBIDDEN"
-      | "IO_ERROR" = "IO_ERROR",
+      | "IO_ERROR"
+      | "LIMIT" = "IO_ERROR",
   ) {
     super(message);
     this.name = "StorageError";
@@ -126,6 +129,64 @@ export class LocalStorage {
     if (range?.end != null) opts.end = range.end;
     const rs = Object.keys(opts).length > 0 ? createReadStream(absolute, opts) : createReadStream(absolute);
     return rs as unknown as NodeJS.ReadableStream;
+  }
+
+  /** Escribe un stream de entrada (backpressure del productor) en disco sin
+   *  cargar el archivo en memoria. Opcional `maxBytes` aborta con StorageError
+   *  code "LIMIT" si el stream supera el tope. La escritura es atómica: se
+   *  escribe a un temporal y se renombra al destino solo al terminar bien. */
+  async putStream(
+    storageKey: string,
+    source: NodeJS.ReadableStream,
+    opts?: { maxBytes?: number },
+  ): Promise<{ storageKey: string; sizeBytes: number }> {
+    const absolute = this.resolveKey(storageKey);
+    await mkdir(path.dirname(absolute), { recursive: true });
+    const tmpPath = `${absolute}.${randomUUID()}.tmp`;
+    let size = 0;
+    let settled = false;
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const ws = createWriteStream(tmpPath);
+        const counter = new Transform({
+          transform(chunk: Buffer, _encoding, cb) {
+            size += chunk.length;
+            if (opts?.maxBytes != null && size > opts.maxBytes) {
+              const err = new StorageError("Llímite de tamaño excedido.", "LIMIT");
+              cb(err);
+              return;
+            }
+            cb(null, chunk);
+          },
+        });
+
+        const fail = (cause: unknown) => {
+          if (settled) return;
+          settled = true;
+          ws.destroy();
+          reject(cause);
+        };
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+
+        (source as NodeJS.ReadableStream).on("error", fail);
+        counter.on("error", fail);
+        ws.on("error", fail);
+        ws.on("finish", finish);
+
+        (source as NodeJS.ReadableStream).pipe(counter).pipe(ws);
+      });
+
+      await rename(tmpPath, absolute);
+      return { storageKey, sizeBytes: size };
+    } catch (cause) {
+      await rm(tmpPath, { force: true }).catch(() => {});
+      throw cause;
+    }
   }
 
   async remove(storageKey: string): Promise<void> {

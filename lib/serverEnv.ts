@@ -21,6 +21,10 @@ export type ServerEnv = {
 const required = (name: string): string => {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  if (name === "AUTH_SECRET" && value.length < 32)
+    throw new Error(
+      "AUTH_SECRET must be at least 32 characters. Generate with: openssl rand -base64 32",
+    );
   return value;
 };
 

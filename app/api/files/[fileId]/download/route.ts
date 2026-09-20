@@ -1,10 +1,12 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
+import { Readable } from "node:stream";
 import type { NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
-import { storage, StorageError } from "@/lib/server/storage";
+import { mimeFor, storage, StorageError } from "@/lib/server/storage";
+import { rateLimit } from "@/lib/server/rate-limit";
 
 export async function GET(
   request: NextRequest,
@@ -19,18 +21,28 @@ export async function GET(
   }
   const userId = session.user.id;
 
+  // --- 1b) Rate limit por usuario+archivo ---------------------------------
+  const limiter = rateLimit(`dl:${userId}:${fileId}`, 30, 60_000);
+  if (!limiter.ok) {
+    return Response.json(
+      { error: "Demasiadas peticiones. Intenta de nuevo en unos instantes." },
+      { status: 429, headers: { "Retry-After": String(limiter.retryAfter ?? 60) } },
+    );
+  }
+
   // --- 2) Archivo ---------------------------------------------------------
   const [file] = await db
     .select()
     .from(schema.productFiles)
-    .where(eq(schema.productFiles.id, fileId))
+    .where(and(eq(schema.productFiles.id, fileId), eq(schema.productFiles.isActive, true)))
     .limit(1);
 
   if (!file) {
     return Response.json({ error: "Archivo no encontrado." }, { status: 404 });
   }
 
-  // --- 3) Compra activa del producto --------------------------------------
+  // --- 3) Compra activa del producto (los admins pueden probarlo sin compra) -
+  const isAdmin = session.user.role === "admin";
   const [purchase] = await db
     .select()
     .from(schema.purchases)
@@ -43,35 +55,15 @@ export async function GET(
     )
     .limit(1);
 
-  if (!purchase) {
+  if (!purchase && !isAdmin) {
     return Response.json(
       { error: "No tienes acceso a este archivo." },
       { status: 403 },
     );
   }
 
-  // --- 4) Límite de descargas por archivo + usuario -----------------------
-  if (file.downloadLimit != null) {
-    const [{ cnt }] = await db
-      .select({ cnt: count() })
-      .from(schema.downloads)
-      .where(
-        and(
-          eq(schema.downloads.userId, userId),
-          eq(schema.downloads.fileId, fileId),
-        ),
-      );
-
-    if (cnt >= file.downloadLimit) {
-      return Response.json(
-        { error: `Has alcanzado el límite de ${file.downloadLimit} descarga(s) para este archivo.` },
-        { status: 429 },
-      );
-    }
-  }
-
   // --- 5) Minutos mínimos tras pago (minMinutesAfterPayment) ---------------
-  if (file.minMinutesAfterPayment > 0 && purchase.grantedAt) {
+  if (purchase && file.minMinutesAfterPayment > 0 && purchase.grantedAt) {
     const elapsed = Date.now() - purchase.grantedAt.getTime();
     const minMs = file.minMinutesAfterPayment * 60_000;
     if (elapsed < minMs) {
@@ -83,39 +75,95 @@ export async function GET(
     }
   }
 
-  // --- 6) Registrar descarga ----------------------------------------------
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    null;
-  const userAgent = request.headers.get("user-agent") ?? null;
+  // --- 6) Registrar la descarga (solo clientes; el admin de prueba no cuenta)
+  // Se registra en `downloads` después de comprobar almacenamiento, y una
+  // descarga fallida no debe consumir el límite ni el historial.
+  if (purchase) {
+    const ip = (
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("x-real-ip") ??
+      null
+    )?.slice(0, 45) ?? null;
+    const userAgent = request.headers.get("user-agent") ?? null;
 
-  await db.insert(schema.downloads).values({
-    userId,
-    productId: file.productId,
-    fileId: file.id,
-    purchaseId: purchase.id,
-    ipAddress: ip,
-    userAgent,
-  });
+    if (file.downloadLimit != null) {
+      // Conteo + inserción atómicos con advisory lock por usuario+archivo, para
+      // que dos descargas concurrentes no excedan el límite.
+      let overLimit = false;
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`dl:${userId}:${fileId}`}))`);
+        const [{ cnt }] = await tx
+          .select({ cnt: count() })
+          .from(schema.downloads)
+          .where(and(eq(schema.downloads.userId, userId), eq(schema.downloads.fileId, fileId)));
+        if (cnt >= (file.downloadLimit as number)) {
+          overLimit = true;
+          return;
+        }
+        await tx.insert(schema.downloads).values({
+          userId,
+          productId: file.productId,
+          fileId: file.id,
+          purchaseId: purchase.id,
+          ipAddress: ip,
+          userAgent,
+        });
+      });
+      if (overLimit) {
+        return Response.json(
+          { error: `Has alcanzado el límite de ${file.downloadLimit} descarga(s) para este archivo.` },
+          { status: 429 },
+        );
+      }
+    } else {
+      await db
+        .insert(schema.downloads)
+        .values({
+          userId,
+          productId: file.productId,
+          fileId: file.id,
+          purchaseId: purchase.id,
+          ipAddress: ip,
+          userAgent,
+        })
+        .catch(() => {});
+    }
+  }
 
-  // --- 7) Servir el archivo -----------------------------------------------
+  // --- 7) Servir el archivo por streaming (sin cargarlo en memoria) --------
+  let total: number;
   try {
-    const object = await storage.get(file.storageKey);
-
-    return new Response(new Uint8Array(object.data), {
-      status: 200,
-      headers: {
-        "Content-Type": object.mimeType ?? "application/octet-stream",
-        "Content-Length": String(object.sizeBytes),
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
+    total = file.sizeBytes ?? (await storage.stat(file.storageKey)).sizeBytes;
   } catch (cause) {
     if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
       return Response.json({ error: "Archivo no encontrado en almacenamiento." }, { status: 404 });
     }
     return Response.json({ error: "Error al servir el archivo." }, { status: 500 });
   }
+
+  let stream;
+  try {
+    stream = storage.stream(file.storageKey);
+    // Si el archivo desaparece a mitad de lectura, abortamos el stream en
+    // silencio (evita un uncaughtException; el cliente ya recibe cortado).
+    (stream as NodeJS.ReadableStream).on("error", () => {});
+  } catch (cause) {
+    if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
+      return Response.json({ error: "Archivo no encontrado en almacenamiento." }, { status: 404 });
+    }
+    return Response.json({ error: "Error al servir el archivo." }, { status: 500 });
+  }
+
+  return new Response(
+    Readable.toWeb(stream as unknown as Readable) as unknown as ReadableStream,
+    {
+      status: 200,
+      headers: {
+        "Content-Type": file.mimeType?.trim() || mimeFor(file.storageKey) || "application/octet-stream",
+        "Content-Length": String(total),
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+        "X-Content-Type-Options": "nosniff",
+      },
+    },
+  );
 }

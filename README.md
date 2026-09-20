@@ -33,8 +33,7 @@ app/
   api/           payment/init, webhooks/wompi, files/[fileId]/download
 
 components/      ui/, landing/, customer/, admin/, checkout/
-lib/             db/, auth/, utils/ (cn, format), serverEnv, constants
-services/        products, orders, payments, entitlements, deliveries, users, coupons, emails, analytics, landing
+lib/             db/, auth/, server/ (actions, storage, rate-limit, wompi), utils/ (cn, format), serverEnv, constants
 types/           Tipos de dominio compartidos
 emails/          Plantillas transaccionales HTML
 database/        Migraciones y seeds

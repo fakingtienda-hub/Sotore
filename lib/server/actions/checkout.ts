@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -8,7 +8,10 @@ import { cookies } from "next/headers";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
-import { grantOrderEntitlements } from "@/lib/server/entitlements";
+import { ensureOrderEntitlements } from "@/lib/server/entitlements";
+import { claimCouponForApprovedOrder } from "@/lib/server/coupon-usage";
+import { setOrderTokenCookie, ownerMatchesOrder } from "@/lib/server/order-ownership";
+import { getWompiConfig } from "@/lib/server/wompi";
 import { auth } from "@/lib/auth/server";
 import { serverEnv } from "@/lib/serverEnv";
 
@@ -37,12 +40,21 @@ async function setBuyerSessionCookie(userId: string) {
   const setCookieEntries =
     typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
   for (const entry of setCookieEntries) {
-    const clean = entry.split(";")[0].trim();
-    const idx = clean.indexOf("=");
-    if (idx === -1) continue;
-    const name = clean.slice(0, idx).trim();
-    const value = decodeURIComponent(clean.slice(idx + 1).trim());
+    const cookiePart = entry.split(";")[0].trim();
+    const eqIdx = cookiePart.indexOf("=");
+    if (eqIdx === -1) continue;
+    const name = cookiePart.slice(0, eqIdx).trim();
     if (!name.startsWith("fakingstore")) continue;
+    let rawValue = cookiePart.slice(eqIdx + 1).trim();
+    if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
+      rawValue = rawValue.slice(1, -1);
+    }
+    let value: string;
+    try {
+      value = decodeURIComponent(rawValue);
+    } catch {
+      value = rawValue;
+    }
     cookieStore.set(name, value, {
       httpOnly: true,
       sameSite: "lax",
@@ -143,6 +155,19 @@ export async function getPublishedProductBySlug(slug: string) {
   return rows[0] ?? null;
 }
 
+// Producto elegido EXPRESAMENTE para vitrina (destacado / CTA del hero): se
+// muestra su imagen y precio aunque siga en borrador (misma regla que el tema:
+// la elección del admin manda). Para COMPRAR sí se exige publicado
+// (getPublishedProductBySlug / createPendingOrder).
+export async function getLandingShowcaseProduct(slug: string) {
+  const rows = await db
+    .select()
+    .from(schema.products)
+    .where(eq(schema.products.slug, slug))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 async function getOrCreateGuestUser(name: string, email: string): Promise<string> {
   const normalized = email.trim().toLowerCase();
   const existing = await db
@@ -215,6 +240,7 @@ export async function createPendingOrder(input: unknown): Promise<{
   const total = Math.max(0, subtotal - discount);
   const orderId = randomUUID();
   const orderCode = generateOrderCode();
+  const ownerToken = randomBytes(24).toString("base64url");
 
   let insertedOrderId: string | undefined;
   await db.transaction(async (tx) => {
@@ -229,6 +255,7 @@ export async function createPendingOrder(input: unknown): Promise<{
       currency: product.currency,
       couponCode: couponUsedCode,
       couponId,
+      ownerToken,
     });
     await tx.insert(schema.orderItems).values({
       orderId,
@@ -238,26 +265,36 @@ export async function createPendingOrder(input: unknown): Promise<{
       quantity: 1,
       currency: product.currency,
     });
-    if (couponUsedCode && couponId) {
-      await tx
-        .update(schema.coupons)
-        .set({ usedCount: sql`${schema.coupons.usedCount} + 1` })
-        .where(eq(schema.coupons.id, couponId));
-      await tx.insert(schema.couponUsages).values({ couponId, orderId, userId });
-    }
+    // NOTA: el cupón NO se consume al crear la orden (las órdenes abandonadas
+    // no deben agotar el presupuesto). `claimCouponForApprovedOrder` lo
+    // consume de forma atómica solo cuando la orden se aprueba.
     insertedOrderId = orderId;
   });
 
   revalidatePath("/admin/sales");
+  await setOrderTokenCookie(orderCode, ownerToken);
   return { ok: true, orderId: insertedOrderId, orderCode };
 }
 
 /**
  * Modo demo (local): marca la orden como aprobada sin pasar por Wompi.
- * Solo para desarrollo/testing. La Fase 8 validará pagos reales vía webhook
- * usando el mismo camino de entrega (grantOrderEntitlements).
+ * Solo para desarrollo/testing sin Wompi configurada: en producción o con la
+ * pasarela activa la acción se niega, y además el caller debe acreditar la
+ * titularidad de la orden (cookie de titularidad + ownerToken en BD).
  */
 export async function simulateDemoPayment(orderCode: string): Promise<{ ok: boolean; error?: string }> {
+  if (serverEnv.isProd || getWompiConfig().configured) {
+    return {
+      ok: false,
+      error: "El pago demo solo está disponible en desarrollo sin Wompi configurada.",
+    };
+  }
+
+  const ownsOrder = await ownerMatchesOrder(orderCode);
+  if (!ownsOrder) {
+    return { ok: false, error: "No tienes acceso a esa orden." };
+  }
+
   const [order] = await db
     .select()
     .from(schema.orders)
@@ -266,10 +303,8 @@ export async function simulateDemoPayment(orderCode: string): Promise<{ ok: bool
   if (!order) {
     return { ok: false, error: "La orden no existe." };
   }
-  if (order.status !== "pending") {
-    return { ok: false, error: "La orden ya no está pendiente." };
-  }
-  await db
+
+  const claimed = await db
     .update(schema.orders)
     .set({
       status: "approved",
@@ -278,12 +313,19 @@ export async function simulateDemoPayment(orderCode: string): Promise<{ ok: bool
       paidAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(schema.orders.id, order.id));
+    .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "pending")))
+    .returning({ id: schema.orders.id });
 
-  const delivered = await grantOrderEntitlements(order.id);
+  if (claimed.length === 0) {
+    return { ok: false, error: "La orden ya no está pendiente." };
+  }
+
+  const delivered = await ensureOrderEntitlements(order.id);
   if (!delivered.ok) {
     return { ok: false, error: delivered.reason ?? "No se pudo activar la entrega." };
   }
+
+  await claimCouponForApprovedOrder(order.id);
 
   await setBuyerSessionCookie(order.userId);
 

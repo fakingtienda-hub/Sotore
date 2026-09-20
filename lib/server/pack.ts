@@ -1,6 +1,6 @@
 import { and, eq, isNotNull } from "drizzle-orm";
-import { createWriteStream } from "node:fs";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
@@ -12,6 +12,15 @@ import { storage } from "@/lib/server/storage";
 
 function safeEntryName(name: string): string {
   return name.replace(/[\\/\0]/g, "_").trim();
+}
+
+/** Tipos que ya vienen comprimidos: dentro del ZIP se guardan "store" (copiados
+ *  tal cual) en vez de volver a deflaterlos, que no reduce el tamaño y gasta CPU. */
+function shouldStoreRaw(f: schema.ProductFile): boolean {
+  const m = (f.mimeType ?? "").toLowerCase();
+  if (m.startsWith("video/") || m.startsWith("audio/") || m.startsWith("image/")) return true;
+  const t = (f.fileType ?? "").toLowerCase();
+  return t === "video" || t === "audio" || t === "image" || t === "zip";
 }
 
 export async function buildProductPackZip(
@@ -74,22 +83,52 @@ export async function buildProductPackZip(
   for (const f of sorted) {
     const folder = f.groupId ? (groupNames.get(f.groupId) ?? null) : null;
     const entryName = folder ? `${safeEntryName(folder)}/${safeEntryName(f.name)}` : safeEntryName(f.name);
-    archive.append(storage.stream(f.storageKey) as unknown as Readable, { name: entryName });
+    archive.append(storage.stream(f.storageKey) as unknown as Readable, {
+      name: entryName,
+      store: shouldStoreRaw(f),
+    });
   }
 
   archive.finalize();
   await finished;
 
   try {
-    const zipStat = await stat(zipPath);
-    const data = await readFile(zipPath);
-    await storage.put(zipKey, new Uint8Array(data));
+    // Volcamos el ZIP a storage por streaming (los packs con videos/PDF pesan
+    // mucho; no se deben cargar enteros en memoria).
+    const { sizeBytes } = await storage.putStream(
+      zipKey,
+      createReadStream(zipPath) as unknown as NodeJS.ReadableStream,
+    );
     await db
       .update(schema.products)
-      .set({ zipKey, zipSizeBytes: zipStat.size, zipGeneratedAt: new Date() })
+      .set({ zipKey, zipSizeBytes: sizeBytes, zipGeneratedAt: new Date() })
       .where(eq(schema.products.id, productId));
-    return { ok: true, sizeBytes: zipStat.size };
+    return { ok: true, sizeBytes };
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/** Invalida el ZIP cacheado: elimina el archivo y deja `zipKey` en null para
+ *  que las próximas peticiones del pack lo regeneren bajo demanda. Se llama
+ *  cada vez que cambian los archivos/carpetas del producto. */
+export async function invalidateProductPackZip(productId: string): Promise<void> {
+  try {
+    const [row] = await db
+      .select({ zipKey: schema.products.zipKey })
+      .from(schema.products)
+      .where(eq(schema.products.id, productId))
+      .limit(1);
+    if (!row) return;
+    if (row.zipKey) {
+      await storage.remove(row.zipKey).catch(() => {});
+    }
+    await db
+      .update(schema.products)
+      .set({ zipKey: null, zipSizeBytes: null, zipGeneratedAt: null })
+      .where(eq(schema.products.id, productId));
+  } catch {
+    // La invalidación es best-effort: un fallo aquí no debe romper la acción
+    // principal (guardar archivos); el pack quedará stale pero regenerable.
   }
 }

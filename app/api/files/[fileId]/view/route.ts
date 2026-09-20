@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
 import { mimeFor, storage, StorageError } from "@/lib/server/storage";
+import { rateLimit } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -22,18 +23,28 @@ export async function GET(
   }
   const userId = session.user.id;
 
+  // --- 1b) Rate limit por usuario (los rangos de vídeo generan varias peticiones)
+  const limiter = rateLimit(`view:${userId}`, 300, 60_000);
+  if (!limiter.ok) {
+    return Response.json(
+      { error: "Demasiadas peticiones. Intenta de nuevo en unos instantes." },
+      { status: 429, headers: { "Retry-After": String(limiter.retryAfter ?? 60) } },
+    );
+  }
+
   // --- 2) Archivo ---------------------------------------------------------
   const [file] = await db
     .select()
     .from(schema.productFiles)
-    .where(eq(schema.productFiles.id, fileId))
+    .where(and(eq(schema.productFiles.id, fileId), eq(schema.productFiles.isActive, true)))
     .limit(1);
 
   if (!file) {
     return Response.json({ error: "Archivo no encontrado." }, { status: 404 });
   }
 
-  // --- 3) Compra activa del producto --------------------------------------
+  // --- 3) Compra activa del producto (los admins pueden probarlo sin compra) -
+  const isAdmin = session.user.role === "admin";
   const [purchase] = await db
     .select()
     .from(schema.purchases)
@@ -46,12 +57,12 @@ export async function GET(
     )
     .limit(1);
 
-  if (!purchase) {
+  if (!purchase && !isAdmin) {
     return Response.json({ error: "No tienes acceso a este archivo." }, { status: 403 });
   }
 
   // --- 4) Minutos mínimos tras pago (minMinutesAfterPayment) ---------------
-  if (file.minMinutesAfterPayment > 0 && purchase.grantedAt) {
+  if (purchase && file.minMinutesAfterPayment > 0 && purchase.grantedAt) {
     const elapsed = Date.now() - purchase.grantedAt.getTime();
     const minMs = file.minMinutesAfterPayment * 60_000;
     if (elapsed < minMs) {
@@ -75,7 +86,12 @@ export async function GET(
     }
   }
 
-  const contentType = file.mimeType ?? mimeFor(file.storageKey) ?? "application/octet-stream";
+  const storedMime = file.mimeType?.trim().toLowerCase();
+  const derivedMime = mimeFor(file.storageKey);
+  const contentType =
+    storedMime && storedMime !== "application/octet-stream" && storedMime !== "text/plain"
+      ? storedMime
+      : derivedMime ?? storedMime ?? "application/octet-stream";
   const baseHeaders: Record<string, string> = {
     "Content-Type": contentType,
     "Accept-Ranges": "bytes",
@@ -116,6 +132,9 @@ export async function GET(
     let stream;
     try {
       stream = storage.stream(file.storageKey, { start, end });
+      // Si el archivo desaparece a mitad de lectura, abortamos el stream en
+      // silencio (evita un uncaughtException; el cliente ya recibe cortado).
+      (stream as NodeJS.ReadableStream).on("error", () => {});
     } catch (cause) {
       if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
         return Response.json({ error: "Archivo no encontrado en almacenamiento." }, { status: 404 });
@@ -138,6 +157,7 @@ export async function GET(
   let fullStream;
   try {
     fullStream = storage.stream(file.storageKey);
+    (fullStream as NodeJS.ReadableStream).on("error", () => {});
   } catch (cause) {
     if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
       return Response.json({ error: "Archivo no encontrado en almacenamiento." }, { status: 404 });

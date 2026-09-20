@@ -25,7 +25,7 @@ export async function GET(
   const [file] = await db
     .select()
     .from(schema.productFiles)
-    .where(eq(schema.productFiles.id, fileId))
+    .where(and(eq(schema.productFiles.id, fileId), eq(schema.productFiles.isActive, true)))
     .limit(1);
 
   if (!file) {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { listCustomers } from "@/lib/server/actions/crm";
+import { Pagination } from "@/app/admin/_components/pagination";
 import { formatDate, formatPrice } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
@@ -8,10 +9,12 @@ export const dynamic = "force-dynamic";
 export default async function AdminCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  const { q } = await searchParams;
-  const customers = await listCustomers(q);
+  const { q, page } = await searchParams;
+  const data = await listCustomers(q, Number(page ?? 1) || 1);
+  const customers = data.rows;
+  const href = (p: number) => `?${new URLSearchParams({ ...(q ? { q } : {}), page: String(p) })}`;
 
   return (
     <div>
@@ -75,6 +78,7 @@ export default async function AdminCustomersPage({
           </table>
         </div>
       )}
+      <Pagination href={href} page={data.page} totalPages={data.totalPages} />
     </div>
   );
 }
