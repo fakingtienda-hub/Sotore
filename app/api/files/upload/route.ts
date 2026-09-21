@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import type { NextRequest } from "next/server";
 
 import { getSession } from "@/lib/auth/session";
+import { createFileTypeSniff, FileTypeMismatchError } from "@/lib/server/file-sniff";
 import { mimeFor, storage, StorageError } from "@/lib/server/storage";
 import { serverEnv } from "@/lib/serverEnv";
 
@@ -69,9 +70,19 @@ export async function POST(req: NextRequest) {
 
       const safeName = sanitizeFileName(filename);
       const storageKey = `products/${productId}/${randomUUID()}-${safeName}`;
+      const ext = path.extname(safeName).toLowerCase().replace(/^\./, "");
+
+      // Valida por firma de contenido (magic bytes) que el archivo no esté
+      // disfrazado con otra extensión. El stream se inspecciona al vuelo sin
+      // cargar el archivo en memoria.
+      const sniff = createFileTypeSniff(ext) as unknown as NodeJS.ReadableStream;
+      stream.pipe(sniff as never);
+      stream.on("error", (e: unknown) => {
+        (sniff as unknown as import("node:stream").Transform).destroy(e as Error);
+      });
 
       storage
-        .putStream(storageKey, stream, { maxBytes: serverEnv.maxUploadBytes })
+        .putStream(storageKey, sniff, { maxBytes: serverEnv.maxUploadBytes })
         .then((r) => {
           resolveOutcome({
             kind: "ok",
@@ -81,7 +92,9 @@ export async function POST(req: NextRequest) {
           });
         })
         .catch((cause) => {
-          if (cause instanceof StorageError && cause.code === "LIMIT") {
+          if (cause instanceof FileTypeMismatchError) {
+            resolveOutcome({ kind: "error", status: 400, message: cause.message });
+          } else if (cause instanceof StorageError && cause.code === "LIMIT") {
             resolveOutcome({
               kind: "error",
               status: 413,
