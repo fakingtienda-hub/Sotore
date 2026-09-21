@@ -188,19 +188,31 @@ export async function POST(request: Request) {
   }
 
   if ((TERMINAL_STATUSES as readonly string[]).includes(status)) {
-    // Estado terminal tras una aprobación (reembolso/anulación posterior):
-    // se revoca el acceso concedido y se libera el cupón consumido.
-    if (order.status === "approved") {
+    // El estado terminal solo afecta a una orden cuya transacción APROBADA es
+    // exactamente esta (mismo transaction.id). Comparar contra gatewayReference
+    // evita que una anulación/reintento de OTRA transacción revoque un pago
+    // legítimo, y que un evento terminal que llegue antes que el APPROVED
+    // "mate" un pago válido: una orden pending NO se marca terminal aquí
+    // (esa expiración la maneja la lógica de caducidad, no el webhook).
+    const isSameTransaction = !!txId && order.gatewayReference === txId;
+    if (order.status === "approved" && isSameTransaction) {
       await revokeOrderEntitlements(order.id);
       await releaseCouponForOrder(order.id);
+      await db
+        .update(schema.orders)
+        .set({ ...updateBase, status: status.toLowerCase() })
+        .where(eq(schema.orders.id, order.id));
+      revalidatePath("/admin/sales");
+      revalidatePath("/library");
+      return Response.json({ ok: true, revoked: true, transactionId: txId });
     }
-    await db
-      .update(schema.orders)
-      .set({ ...updateBase, status: status.toLowerCase() })
-      .where(eq(schema.orders.id, order.id));
-    revalidatePath("/admin/sales");
-    revalidatePath("/library");
-    return Response.json({ ok: true });
+    // Transacción distinta a la aprobada, u orden todavía pendiente: se
+    // registra la firma pero NO se cambia el estado de la orden, de modo que
+    // un APPROVED posterior (de la transacción real) sigue siendo procesable.
+    return Response.json({
+      ok: true,
+      ignored: order.status === "approved" ? "transacción distinta a la aprobada" : "orden aún no aprobada",
+    });
   }
 
   // PENDING u otros estados no terminales: no cambian la orden.
