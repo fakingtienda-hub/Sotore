@@ -308,7 +308,10 @@ export const couponUsages = pgTable(
       .references(() => users.id, { onDelete: "restrict" }),
     usedAt: timestamp("used_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("coupon_usages_coupon_idx").on(t.couponId)],
+  (t) => [
+    index("coupon_usages_coupon_idx").on(t.couponId),
+    uniqueIndex("coupon_usages_coupon_order_uq").on(t.couponId, t.orderId),
+  ],
 );
 
 // ---------------------------------------------------------------------------
