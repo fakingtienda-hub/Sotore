@@ -110,6 +110,7 @@ export default async function LibraryProductPage({
         }}
         files={files}
         groups={catalogGroups}
+        userId={user.id}
       />
     </div>
   );

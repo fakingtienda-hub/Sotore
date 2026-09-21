@@ -278,6 +278,18 @@ function GroupIcon({ name }: { name: string }) {
 const storageCache = new Map<string, Set<string>>();
 const storageListeners = new Set<() => void>();
 const EMPTY_SET: Set<string> = new Set();
+// La caché es module-level y comparte el bundle entre todas las bibliotecas:
+// se acota para que no crezca sin límite al navegar entre productos.
+const MAX_CACHE_KEYS = 100;
+
+function cacheSet(key: string, set: Set<string>) {
+  storageCache.set(key, set);
+  while (storageCache.size > MAX_CACHE_KEYS) {
+    const oldest = storageCache.keys().next().value;
+    if (oldest === undefined) break;
+    storageCache.delete(oldest);
+  }
+}
 
 function readStoredSet(key: string): Set<string> {
   let set = storageCache.get(key);
@@ -294,13 +306,13 @@ function readStoredSet(key: string): Set<string> {
     } catch {
       /* ignore */
     }
-    storageCache.set(key, set);
+    cacheSet(key, set);
   }
   return set;
 }
 
 function writeStoredSet(key: string, next: Set<string>) {
-  storageCache.set(key, next);
+  cacheSet(key, next);
   try {
     localStorage.setItem(key, JSON.stringify([...next]));
   } catch {
@@ -520,10 +532,12 @@ export function FilesList({
   product,
   files,
   groups,
+  userId,
 }: {
   product: LibraryProduct;
   files: LibraryFileRow[];
   groups: LibraryFileGroup[];
+  userId: string;
 }) {
   const [search, setSearch] = useState("");
   const [groupId, setGroupId] = useState<string>("all");
@@ -532,10 +546,23 @@ export function FilesList({
   const [viewing, setViewing] = useState<LibraryFileRow | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
 
-  const favKey = `library-favs:${product.id}`;
-  const selKey = `library-selected:${product.id}`;
+  // Las claves se acotan por usuario: así los favoritos/selección NO se
+  // comparten entre cuentas que usen el mismo navegador.
+  const favKey = `library-favs:${userId}:${product.id}`;
+  const selKey = `library-selected:${userId}:${product.id}`;
   const [favorites, setFavorites] = useStoredSet(favKey);
   const [selected, setSelected] = useStoredSet(selKey);
+
+  // Renderizado por tandas: con +2.000 archivos no se montan todas las
+  // tarjetas de golpe ni se disparan cientos de miniaturas al cargar. Se
+  // muestran INITIAL_BATCH y un sentinel (IntersectionObserver) pide el
+  // siguiente lote al acercarse al final.
+  const INITIAL_BATCH = 42;
+  const BATCH_STEP = 42;
+  const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH);
+  const listTopRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const lastLoadRef = useRef(0);
 
   const query = search.trim().toLowerCase();
 
@@ -564,6 +591,49 @@ export function FilesList({
     }
     return map;
   }, [baseRows]);
+
+  // Cualquier cambio de filtro/búsqueda/orden reinicia la lista al primer lote.
+  // Ajuste durante render (patrón recomendado por React) para evitar el
+  // setState en cascada dentro de un efecto.
+  const filterKey = `${query}|${groupId}|${sortBy}|${onlyFavorites}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
+    setVisibleCount(INITIAL_BATCH);
+  }
+
+  // Vuelve al tope del listado solo cuando el filtro cambió de verdad.
+  const firstRenderRef = useRef(true);
+  useEffect(() => {
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false;
+      return;
+    }
+    listTopRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+  }, [filterKey]);
+
+  const hasMore = visibleCount < filtered.length;
+  const visible = filtered.slice(0, hasMore ? visibleCount : undefined);
+
+  const loadMore = useCallback(() => {
+    const now = Date.now();
+    if (now - lastLoadRef.current < 300) return;
+    lastLoadRef.current = now;
+    setVisibleCount((c) => Math.min(c + BATCH_STEP, filtered.length));
+  }, [filtered.length]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMore();
+      },
+      { rootMargin: "600px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadMore]);
 
   const selectedCount = selected.size;
   const allFilteredSelected = filtered.length > 0 && filtered.every((f) => selected.has(f.id));
@@ -787,7 +857,7 @@ export function FilesList({
         </aside>
 
         <section className="pattern-area" aria-label="Patrones">
-          <div className="pattern-header">
+          <div className="pattern-header" ref={listTopRef}>
             <div className="pattern-title">
               <h2>Explora tus patrones</h2>
               <span className="file-count">
@@ -829,19 +899,37 @@ export function FilesList({
               </p>
             </div>
           ) : (
-            <ul className="pattern-grid">
-              {filtered.map((f) => (
-                <PatternCard
-                  key={f.id}
-                  file={f}
-                  selected={selected.has(f.id)}
-                  favorite={favorites.has(f.id)}
-                  onToggleSelect={toggleSelect}
-                  onToggleFavorite={toggleFavorite}
-                  onView={setViewing}
-                />
-              ))}
-            </ul>
+            <>
+              <ul className="pattern-grid">
+                {visible.map((f) => (
+                  <PatternCard
+                    key={f.id}
+                    file={f}
+                    selected={selected.has(f.id)}
+                    favorite={favorites.has(f.id)}
+                    onToggleSelect={toggleSelect}
+                    onToggleFavorite={toggleFavorite}
+                    onView={setViewing}
+                  />
+                ))}
+              </ul>
+
+              {hasMore ? (
+                <div className="load-more-bar" ref={sentinelRef}>
+                  <button type="button" className="outline-button" onClick={loadMore}>
+                    Mostrar más ({filtered.length - visibleCount} restantes)
+                  </button>
+                  <span className="helper-text">
+                    Mostrando {(visibleCount).toLocaleString("es-CO")} de{" "}
+                    {filtered.length.toLocaleString("es-CO")}
+                  </span>
+                </div>
+              ) : visibleCount > INITIAL_BATCH ? (
+                <p className="helper-text load-more-bar">
+                  Mostrando los {filtered.length.toLocaleString("es-CO")} archivos.
+                </p>
+              ) : null}
+            </>
           )}
         </section>
       </div>
