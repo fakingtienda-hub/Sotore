@@ -13,11 +13,11 @@ export type WompiConfig = {
 };
 
 export function getWompiConfig(): WompiConfig {
-  const env = (process.env.WOMPI_ENV ?? "sandbox") as WompiConfig["env"];
-  const publicKey = process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY ?? "";
-  const integritySecret = process.env.WOMPI_INTEGRITY_SECRET ?? "";
-  const eventsSecret = process.env.WOMPI_EVENTS_SECRET ?? "";
-  const apiUrl = process.env.WOMPI_API_URL ?? (env === "production" ? "https://production.wompi.co/v1" : "https://sandbox.wompi.co/v1");
+  const env = serverEnv.wompiEnv;
+  const publicKey = serverEnv.wompiPublicKey;
+  const integritySecret = serverEnv.wompiIntegritySecret;
+  const eventsSecret = serverEnv.wompiEventsSecret;
+  const apiUrl = serverEnv.wompiApiUrl || (env === "production" ? "https://production.wompi.co/v1" : "https://sandbox.wompi.co/v1");
   const checkoutUrl = "https://checkout.wompi.co/p/";
   return {
     configured: !!(publicKey && integritySecret),
