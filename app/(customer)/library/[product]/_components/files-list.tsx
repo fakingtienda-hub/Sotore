@@ -136,6 +136,145 @@ const FolderSearchIcon = () => (
   </Icon>
 );
 
+const FolderIcon = () => (
+  <Icon>
+    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+  </Icon>
+);
+
+const PawPrintIcon = () => (
+  <Icon>
+    <circle cx="11" cy="4" r="2" />
+    <circle cx="18" cy="8" r="2" />
+    <circle cx="20" cy="16" r="2" />
+    <path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z" />
+  </Icon>
+);
+
+const GhostIcon = () => (
+  <Icon>
+    <path d="M9 10h.01" />
+    <path d="M15 10h.01" />
+    <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8Z" />
+  </Icon>
+);
+
+const GemIcon = () => (
+  <Icon>
+    <path d="M6 3h12l4 6-10 13L2 9Z" />
+    <path d="M11 3 8 9l4 13 4-13-3-6" />
+    <path d="M2 9h20" />
+  </Icon>
+);
+
+const StarIcon = () => (
+  <Icon>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </Icon>
+);
+
+const PersonStandingIcon = () => (
+  <Icon>
+    <circle cx="12" cy="5" r="1" />
+    <path d="m9 20 3-6 3 6" />
+    <path d="m6 8 6 2 6-2" />
+    <path d="M12 10v4" />
+  </Icon>
+);
+
+const MoonIcon = () => (
+  <Icon>
+    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+  </Icon>
+);
+
+const UserIcon = () => (
+  <Icon>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </Icon>
+);
+
+const WindIcon = () => (
+  <Icon>
+    <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2" />
+    <path d="M9.6 4.6A2 2 0 1 1 11 8H2" />
+    <path d="M12.6 19.4A2 2 0 1 0 14 16H2" />
+  </Icon>
+);
+
+const BriefcaseIcon = () => (
+  <Icon>
+    <path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+    <rect width="20" height="14" x="2" y="6" rx="2" />
+  </Icon>
+);
+
+const WavesIcon = () => (
+  <Icon>
+    <path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" />
+    <path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" />
+    <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" />
+  </Icon>
+);
+
+const ShirtIcon = () => (
+  <Icon>
+    <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+  </Icon>
+);
+
+const DressIcon = () => (
+  <Icon>
+    <path d="M7 7c0-2.8 2.2-4.5 5-4.5S17 4.2 17 7" />
+    <path d="M7 7 4 20.5 12 22l8-1.5L17 7" />
+    <path d="M12 7v15" />
+  </Icon>
+);
+
+const SkirtIcon = () => (
+  <Icon>
+    <path d="M5 7c4.5-2 9.5-2 14 0" />
+    <path d="M6.5 7 9 21h6l2.5-14" />
+    <path d="M12 7v14" />
+  </Icon>
+);
+
+const PantsIcon = () => (
+  <Icon>
+    <path d="M6 3h12" />
+    <path d="M7 3 6 10h12l-1-7" />
+    <path d="M6 10 5 21l7-2 7 2-1-11" />
+    <path d="M12 10v9" />
+  </Icon>
+);
+
+function GroupIcon({ name }: { name: string }) {
+  const key = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+  if (key.includes("animalito")) return <PawPrintIcon />;
+  if (key.includes("hellowen") || key.includes("halloween")) return <GhostIcon />;
+  if (key.includes("accessor")) return <GemIcon />;
+  if (key.includes("costume")) return <StarIcon />;
+  if (key.includes("dress")) return <DressIcon />;
+  if (key.includes("jumpsuit") || key.includes("bodysuit")) return <PersonStandingIcon />;
+  if (key.includes("lingerie") || key.includes("sleepwear")) return <MoonIcon />;
+  if (key.includes("menswear")) return <UserIcon />;
+  if (key.includes("outerwear")) return <WindIcon />;
+  if (key.includes("pant") || key.includes("short")) return <PantsIcon />;
+  if (key.includes("shirt") || key.includes("blouse")) return <ShirtIcon />;
+  if (key.includes("skirt")) return <SkirtIcon />;
+  if (key.includes("suiting")) return <BriefcaseIcon />;
+  if (key.includes("swim")) return <WavesIcon />;
+  return <FolderIcon />;
+}
+
 const storageCache = new Map<string, Set<string>>();
 const storageListeners = new Set<() => void>();
 const EMPTY_SET: Set<string> = new Set();
@@ -633,7 +772,7 @@ export function FilesList({
                 onClick={() => setGroupId(g.id)}
               >
                 <span className="category-icon">
-                  <SparklesIcon />
+                  <GroupIcon name={g.name} />
                 </span>
                 <span>{g.name}</span>
                 <span className="category-count">
