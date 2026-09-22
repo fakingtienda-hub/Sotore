@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
+import { rateLimit } from "@/lib/server/rate-limit";
 import { getOrCreateThumb, thumbDefFor } from "@/lib/server/thumbs";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,18 @@ export async function GET(
     return Response.json({ error: "Debes iniciar sesión para ver el archivo." }, { status: 401 });
   }
   const userId = session.user.id;
+
+  // --- 0) Rate limit por usuario ------------------------------------------
+  // Una biblioteca con lote de miniaturas usa HOY hasta ~235 peticiones al
+  // cargar todas las fichas; 600/min frena abuso/DoS por usuario sin romper
+  // la experiencia del scroll.
+  const limiter = rateLimit(`thumb:${userId}`, 600, 60_000);
+  if (!limiter.ok) {
+    return Response.json(
+      { error: "Demasiadas peticiones. Intenta de nuevo en unos instantes." },
+      { status: 429, headers: { "Retry-After": String(limiter.retryAfter ?? 60) } },
+    );
+  }
 
   // --- 2) Archivo ---------------------------------------------------------
   const [file] = await db

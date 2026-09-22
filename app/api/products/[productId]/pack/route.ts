@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull, max } from "drizzle-orm";
 import { Readable } from "node:stream";
 import type { NextRequest } from "next/server";
 
@@ -25,7 +25,12 @@ export async function GET(
 
   // --- 2) Producto + compra activa (los admins pueden probarlo sin compra) --
   const [product] = await db
-    .select()
+    .select({
+      id: schema.products.id,
+      slug: schema.products.slug,
+      zipKey: schema.products.zipKey,
+      zipSizeBytes: schema.products.zipSizeBytes,
+    })
     .from(schema.products)
     .where(eq(schema.products.id, productId))
     .limit(1);
@@ -50,7 +55,36 @@ export async function GET(
     return Response.json({ error: "No tienes acceso a este producto." }, { status: 403 });
   }
 
-  // --- 3) Generar el pack al vuelo si aún no existe ------------------------
+  // --- 3) Ventana post-pago del ZIP ---------------------------------------
+  // El pack agrupa los archivos activos en carpetas; si alguno define
+  // `minMinutesAfterPayment`, el ZIP respeta esa misma ventana (la más
+  // restrictiva de los archivos incluidos) para no saltarse el desbloqueo
+  // progresivo descargando todo junto.
+  const [agg] = await db
+    .select({ maxMin: max(schema.productFiles.minMinutesAfterPayment) })
+    .from(schema.productFiles)
+    .where(
+      and(
+        eq(schema.productFiles.productId, productId),
+        eq(schema.productFiles.isActive, true),
+        isNotNull(schema.productFiles.groupId),
+      ),
+    );
+
+  const maxMin = agg?.maxMin ?? 0;
+  if (maxMin > 0 && purchase?.grantedAt) {
+    const elapsed = Date.now() - purchase.grantedAt.getTime();
+    const minMs = maxMin * 60_000;
+    if (elapsed < minMs) {
+      const remaining = Math.ceil((minMs - elapsed) / 60_000);
+      return Response.json(
+        { error: `El pack estará disponible en ${remaining} minuto(s).` },
+        { status: 423 },
+      );
+    }
+  }
+
+  // --- 4) Generar el pack al vuelo si aún no existe ------------------------
   if (!product.zipKey) {
     const result = await buildProductPackZip(productId);
     if (!result.ok) {
