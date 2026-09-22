@@ -43,7 +43,14 @@ export async function POST(request: Request) {
   }
 
   const [order] = await db
-    .select()
+    .select({
+      id: schema.orders.id,
+      code: schema.orders.code,
+      status: schema.orders.status,
+      total: schema.orders.total,
+      currency: schema.orders.currency,
+      userId: schema.orders.userId,
+    })
     .from(schema.orders)
     .where(eq(schema.orders.code, parsed.data.orderCode))
     .limit(1);

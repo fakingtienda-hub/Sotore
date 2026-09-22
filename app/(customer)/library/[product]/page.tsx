@@ -19,7 +19,16 @@ export default async function LibraryProductPage({
   const { product: slug } = await params;
 
   const [product] = await db
-    .select()
+    .select({
+      id: schema.products.id,
+      slug: schema.products.slug,
+      title: schema.products.title,
+      price: schema.products.price,
+      compareAtPrice: schema.products.compareAtPrice,
+      currency: schema.products.currency,
+      coverImageUrl: schema.products.coverImageUrl,
+      zipSizeBytes: schema.products.zipSizeBytes,
+    })
     .from(schema.products)
     .where(eq(schema.products.slug, slug))
     .limit(1);

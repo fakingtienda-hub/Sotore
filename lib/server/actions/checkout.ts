@@ -12,6 +12,7 @@ import { ensureOrderEntitlements } from "@/lib/server/entitlements";
 import { claimCouponForApprovedOrder } from "@/lib/server/coupon-usage";
 import { setOrderTokenCookie, ownerMatchesOrder } from "@/lib/server/order-ownership";
 import { getWompiConfig } from "@/lib/server/wompi";
+import { getSession } from "@/lib/auth/session";
 import { auth } from "@/lib/auth/server";
 import { serverEnv } from "@/lib/serverEnv";
 
@@ -148,7 +149,17 @@ export async function getCouponDiscount(
 
 export async function getPublishedProductBySlug(slug: string) {
   const rows = await db
-    .select()
+    .select({
+      id: schema.products.id,
+      slug: schema.products.slug,
+      title: schema.products.title,
+      shortDescription: schema.products.shortDescription,
+      price: schema.products.price,
+      compareAtPrice: schema.products.compareAtPrice,
+      currency: schema.products.currency,
+      coverImageUrl: schema.products.coverImageUrl,
+      theme: schema.products.theme,
+    })
     .from(schema.products)
     .where(and(eq(schema.products.slug, slug), eq(schema.products.status, "published")))
     .limit(1);
@@ -158,10 +169,20 @@ export async function getPublishedProductBySlug(slug: string) {
 // Producto elegido EXPRESAMENTE para vitrina (destacado / CTA del hero): se
 // muestra su imagen y precio aunque siga en borrador (misma regla que el tema:
 // la elección del admin manda). Para COMPRAR sí se exige publicado
-// (getPublishedProductBySlug / createPendingOrder).
+// (getPublishedProductBySlug / createPendingOrder). Se seleccionan solo los
+// campos que el panel de vitrina usa (sin zipKey/seo/peso del producto).
 export async function getLandingShowcaseProduct(slug: string) {
   const rows = await db
-    .select()
+    .select({
+      id: schema.products.id,
+      slug: schema.products.slug,
+      title: schema.products.title,
+      price: schema.products.price,
+      compareAtPrice: schema.products.compareAtPrice,
+      currency: schema.products.currency,
+      coverImageUrl: schema.products.coverImageUrl,
+      theme: schema.products.theme,
+    })
     .from(schema.products)
     .where(eq(schema.products.slug, slug))
     .limit(1);
@@ -331,4 +352,43 @@ export async function simulateDemoPayment(orderCode: string): Promise<{ ok: bool
 
   revalidatePath("/admin/sales");
   return { ok: true };
+}
+
+/**
+ * Estado real de una orden en el camino de pago. Lo llama la página
+ * `/checkout/payment-result` (a la que Wompi redirige al comprador) para no
+ * dejar al usuario en "verificación" infinita: se consulta la BD y, si la
+ * orden ya está aprobada, se crea la sesión del comprador (auto-login) para
+ * que "Ir a mi biblioteca" funcione sin depender de un magic link. Administra
+ * titularidad vía la cookie de la orden (IDOR).
+ */
+export async function getCheckoutOrderStatus(
+  orderCode: string,
+): Promise<{ ok: true; status: string } | { ok: false; error?: string }> {
+  const ownsOrder = await ownerMatchesOrder(orderCode);
+  if (!ownsOrder) {
+    return { ok: false, error: "No tienes acceso a esa orden." };
+  }
+
+  const [order] = await db
+    .select({ status: schema.orders.status, userId: schema.orders.userId })
+    .from(schema.orders)
+    .where(eq(schema.orders.code, orderCode))
+    .limit(1);
+
+  if (!order) {
+    return { ok: false, error: "La orden no existe." };
+  }
+
+  if (order.status === "approved") {
+    // Solo auto-login cuando no hay sesión o pertenece a otro usuario; si ya
+    // hay sesión de este comprador no se crean verificaciones/sesiones extra
+    // en cada poll.
+    const session = await getSession();
+    if (!session?.user || session.user.id !== order.userId) {
+      await setBuyerSessionCookie(order.userId);
+    }
+  }
+
+  return { ok: true, status: order.status };
 }
