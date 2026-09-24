@@ -1,9 +1,10 @@
-import "server-only";
-
 /**
  * Rate limit en memoria (ventana fija), suficiente para un VPS de una sola
  * instancia. Mitiga abuso/DoS en endpoints de descarga; no reemplaza el
  * límite de descargas por archivo (`downloadLimit`).
+ *
+ * Sin guard `server-only`: es lógica pura (una Map) y los scripts de
+ * verificación la ejercitan.
  */
 type Bucket = { count: number; resetAt: number };
 

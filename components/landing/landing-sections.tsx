@@ -76,6 +76,7 @@ function HeroSection({
 }) {
   const content = data.content as { badge?: string; ctaText?: string };
   const href = product ? `/checkout/${product.slug}` : "";
+  const isBuyable = product?.status === "published";
 
   return (
     <header
@@ -99,7 +100,7 @@ function HeroSection({
             ) : null}
 
             <div className="mt-6 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-              {product ? (
+              {isBuyable ? (
                 <Link href={href} className="sf-btn text-lg w-full sm:w-auto">
                   {content.ctaText || "Quiero el pack"}
                 </Link>
@@ -365,6 +366,7 @@ function FaqSection({ data }: { data: LandingSectionData }) {
 function CtaSection({ data, product, site }: { data: LandingSectionData; product: HeroProduct; site: SiteConfig }) {
   const content = data.content as { eyebrow?: string; ctaText?: string };
   const href = product ? `/checkout/${product.slug}` : "";
+  const isBuyable = product?.status === "published";
 
   return (
     <section id="comprar" className="relative overflow-hidden border-t border-[var(--sf-line)]">
@@ -389,7 +391,7 @@ function CtaSection({ data, product, site }: { data: LandingSectionData; product
                   note={site.ctaPriceNote}
                 />
               ) : null}
-              {product ? (
+              {isBuyable ? (
                 <Link href={href} className="sf-btn text-lg w-full sm:w-auto">
                   {content.ctaText || "Quiero el pack"} · {formatPrice(product.price, product.currency)}
                 </Link>
@@ -474,7 +476,7 @@ export async function LandingSections({
         ))}
       </main>
 
-      {product ? (
+      {product && product.status === "published" ? (
         <>
           <div className="h-20 md:hidden" aria-hidden="true" />
           <div className="sf-buybar fixed inset-x-0 bottom-0 z-50 md:hidden">

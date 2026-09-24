@@ -45,3 +45,7 @@ next-env.d.ts
 # runtime uploads (archivos de producto, ZIPs generados) y diagnósticos
 /storage/
 /shorts/
+*.log
+
+# dev server pid
+/dev.server.pid

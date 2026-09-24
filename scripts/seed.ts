@@ -18,8 +18,15 @@ const db = drizzle(queryClient, { schema, casing: "snake_case" });
 
 async function main() {
   const email = process.env.ADMIN_EMAIL ?? "admin@fakingstore.com";
-  const password = process.env.ADMIN_PASSWORD ?? "password";
+  const password = process.env.ADMIN_PASSWORD ?? "";
   const name = process.env.ADMIN_NAME ?? "Admin Fakingstore";
+
+  if (password.length < 12) {
+    console.error(
+      "Define ADMIN_PASSWORD en .env.local (mínimo 12 caracteres) y corre de nuevo: npm run db:seed",
+    );
+    process.exit(1);
+  }
 
   const existing = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
 
@@ -50,7 +57,8 @@ async function main() {
     });
   });
 
-  console.log(`Administrador creado: ${email} (rol: admin, password: ${password})`);
+  console.log(`Administrador creado: ${email} (rol: admin)`);
+  console.log("(la contraseña no se muestra por seguridad)");
 }
 
 main()

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "store_settings_key_idx" ON "store_settings" USING btree ("key");

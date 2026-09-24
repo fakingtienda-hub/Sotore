@@ -10,7 +10,6 @@ export type ServerEnv = {
   emailProvider: "console" | "resend" | "smtp";
   emailApiKey: string;
   emailFrom: string;
-  emailToTest: string;
   isProd: boolean;
   storageDir: string;
   storageBaseUrl: string;
@@ -47,7 +46,6 @@ export const serverEnv: ServerEnv = {
   emailProvider: optional("EMAIL_PROVIDER", "console") as ServerEnv["emailProvider"],
   emailApiKey: optional("EMAIL_API_KEY", ""),
   emailFrom: optional("EMAIL_FROM", "Fakingstore <hola@fakingstore.com>"),
-  emailToTest: optional("EMAIL_TO_TEST", "test@fakingstore.com"),
   storageDir: optional("STORAGE_DIR", "storage"),
   storageBaseUrl: optional("STORAGE_BASE_URL", "/api/files"),
   maxUploadBytes: Number(optional("STORAGE_MAX_FILE_BYTES", String(512 * 1024 * 1024))),

@@ -158,6 +158,8 @@ export function CheckoutForm({
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [phonePrefix, setPhonePrefix] = useState("+57");
   const [couponInput, setCouponInput] = useState("");
   const [applied, setApplied] = useState<{ code: string; discount: number } | null>(null);
   const [couponState, setCouponState] = useState<{ loading: boolean; error: string | null }>({
@@ -183,6 +185,8 @@ export function CheckoutForm({
       slug: product.slug,
       name,
       email,
+      phone: phone.trim() || undefined,
+      phonePrefix: phone.trim() ? phonePrefix : undefined,
       couponCode: applied?.code,
     });
     setPending(false);
@@ -247,7 +251,7 @@ export function CheckoutForm({
       <header className="sf-checkout-head">
         <h1 className="sf-checkout-h1 sf-title text-[clamp(1.75rem,6vw,2.6rem)] text-[var(--sf-paper)]">Finalizar compra</h1>
         <p className="sf-checkout-sub sf-muted mt-2">
-          Solo tu nombre, tu email y el pago. El acceso llega en el instante en que se confirme.
+          Solo tus datos de contacto y el pago. El acceso llega en el instante en que se confirme.
         </p>
       </header>
 
@@ -296,6 +300,50 @@ export function CheckoutForm({
                 className="sf-input"
               />
               <p className="sf-checkout-hint sf-muted mt-1.5 text-xs">Ahí llega el enlace de acceso y la factura.</p>
+            </div>
+
+            <div>
+              <label htmlFor="phone" className="sf-field-label">
+                Teléfono
+              </label>
+              <div className="sf-phone-row mt-2 flex items-stretch gap-2">
+                <select
+                  id="phonePrefix"
+                  name="phonePrefix"
+                  value={phonePrefix}
+                  onChange={(e) => setPhonePrefix(e.target.value)}
+                  className="sf-input w-28 shrink-0"
+                  aria-label="Código de país"
+                >
+                  <option value="+57">CO +57</option>
+                  <option value="+1">US +1</option>
+                  <option value="+52">MX +52</option>
+                  <option value="+507">PA +507</option>
+                  <option value="+34">ES +34</option>
+                  <option value="+56">CL +56</option>
+                  <option value="+54">AR +54</option>
+                  <option value="+595">PY +595</option>
+                  <option value="+51">PE +51</option>
+                  <option value="+58">VE +58</option>
+                </select>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  minLength={6}
+                  maxLength={15}
+                  autoComplete="tel-national"
+                  inputMode="tel"
+                  enterKeyHint="next"
+                  placeholder="300 123 45 67"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
+                  className="sf-input min-w-0 flex-1"
+                />
+              </div>
+              <p className="sf-checkout-hint sf-muted mt-1.5 text-xs">
+                Lo usamos para contactarte si hay alguna duda con tu compra. Llega pre-llenado a Wompi.
+              </p>
             </div>
 
             <div>

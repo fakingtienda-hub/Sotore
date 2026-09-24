@@ -6,6 +6,7 @@ import * as schema from "@/lib/db/schema";
 import { buildWompiCheckoutFields, getWompiConfig } from "@/lib/server/wompi";
 import { ownerMatchesOrder } from "@/lib/server/order-ownership";
 import { rateLimit } from "@/lib/server/rate-limit";
+import { expireStalePendingOrders } from "@/lib/server/order-expiry";
 import { serverEnv } from "@/lib/serverEnv";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,8 @@ export async function POST(request: Request) {
     return Response.json({ error: "No tienes acceso a esa orden." }, { status: 403 });
   }
 
+  await expireStalePendingOrders();
+
   const [order] = await db
     .select({
       id: schema.orders.id,
@@ -63,12 +66,17 @@ export async function POST(request: Request) {
   }
 
   const [user] = await db
-    .select({ name: schema.users.name, email: schema.users.email })
+    .select({
+      name: schema.users.name,
+      email: schema.users.email,
+      phone: schema.users.phone,
+      phonePrefix: schema.users.phonePrefix,
+    })
     .from(schema.users)
     .where(eq(schema.users.id, order.userId))
     .limit(1);
 
-  const config = getWompiConfig();
+  const config = await getWompiConfig();
   if (!config.configured) {
     return Response.json({
       configured: false,
@@ -78,14 +86,27 @@ export async function POST(request: Request) {
     });
   }
 
-  const redirectUrl = `${serverEnv.appUrl}/checkout/payment-result?order=${order.code}`;
+  // Wompi rechaza redirect-url a hosts loopback (localhost/127.x) con un 403 de
+  // CloudFront (protección SSRF), rompiendo todo el checkout. En desarrollo
+  // local se omite el redirect: el pago se confirma igual por webhook y el
+  // comprador vuelve a la app para activar su compra (link de confirmación).
+  const appHost = new URL(serverEnv.appUrl).hostname.toLowerCase();
+  const isLoopback =
+    appHost === "localhost" ||
+    appHost === "0.0.0.0" ||
+    appHost === "::1" ||
+    appHost.startsWith("127.");
+  const redirectUrl = isLoopback ? undefined : `${serverEnv.appUrl}/checkout/payment-result?order=${order.code}`;
   const fields = buildWompiCheckoutFields({
     publicKey: config.publicKey,
+    integritySecret: config.integritySecret,
     reference: order.code,
     amountInCents: order.total,
     currency: order.currency,
     customerFullName: user?.name,
     customerEmail: user?.email,
+    customerPhoneNumber: user?.phone ?? undefined,
+    customerPhonePrefix: user?.phonePrefix ?? undefined,
     redirectUrl,
   });
 

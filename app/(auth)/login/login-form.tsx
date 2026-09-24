@@ -4,15 +4,17 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { signIn } from "@/lib/auth/client";
+import { safeNextPath } from "@/lib/client/safe-redirect";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextParam = searchParams.get("next");
+  const next = safeNextPath(nextParam);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"magic" | "password">("magic");
+  const [mode, setMode] = useState<"magic" | "password">("password");
   const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [error, setError] = useState("");
 
@@ -21,7 +23,7 @@ export function LoginForm() {
     setStatus("loading");
     setError("");
     try {
-      const { error: apiError } = await signIn.magicLink({ email, callbackURL: nextParam ?? "/library" });
+      const { error: apiError } = await signIn.magicLink({ email, callbackURL: next ?? "/library" });
       if (apiError) {
         setStatus("error");
         setError(apiError.message ?? "No se pudo enviar el enlace.");
@@ -47,7 +49,7 @@ export function LoginForm() {
       }
       const role = (data?.user as { role?: string } | undefined)?.role ?? "customer";
       const defaultRedirect = role === "admin" ? "/admin" : "/library";
-      router.push(nextParam ?? defaultRedirect);
+      router.push(next ?? defaultRedirect);
     } catch (err) {
       setStatus("error");
       setError(err instanceof Error ? err.message : "Credenciales inválidas.");

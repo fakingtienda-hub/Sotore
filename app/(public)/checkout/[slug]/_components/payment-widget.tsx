@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { simulateDemoPayment } from "@/lib/server/actions/checkout";
+import { simulateDemoPayment, getLibraryAccessUrl } from "@/lib/server/actions/checkout";
 import { formatPrice } from "@/lib/utils/format";
 
 type InitResponse = {
@@ -14,13 +14,12 @@ type InitResponse = {
   checkout?: { action: string; fields: { name: string; value: string }[]; redirectUrl: string };
 };
 
-const REQUIRED_ENV = ["NEXT_PUBLIC_WOMPI_PUBLIC_KEY", "WOMPI_INTEGRITY_SECRET", "WOMPI_EVENTS_SECRET", "WOMPI_ENV"];
-
 export function PaymentWidget({ orderCode, onPaid }: { orderCode: string; onPaid?: () => void }) {
   const [data, setData] = useState<InitResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [demoState, setDemoState] = useState<"idle" | "busy" | "done">("idle");
   const [demoError, setDemoError] = useState<string | null>(null);
+  const [demoAccessUrl, setDemoAccessUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +48,9 @@ export function PaymentWidget({ orderCode, onPaid }: { orderCode: string; onPaid
     if (res.ok) {
       setDemoState("done");
       onPaid?.();
+      getLibraryAccessUrl(orderCode)
+        .then((r) => setDemoAccessUrl(r.ok ? r.url : "/library"))
+        .catch(() => setDemoAccessUrl("/library"));
     } else {
       setDemoState("idle");
       setDemoError(res.error ?? "No se pudo simular el pago.");
@@ -87,9 +89,9 @@ export function PaymentWidget({ orderCode, onPaid }: { orderCode: string; onPaid
           Tu orden quedó marcada como pagada y el acceso quedó activado de inmediato.
         </p>
         <div className="mt-7 flex justify-center">
-          <Link href="/library" className="sf-btn w-full sm:w-auto">
+          <a href={demoAccessUrl ?? "/library"} className="sf-btn w-full sm:w-auto">
             Ir a mi biblioteca
-          </Link>
+          </a>
         </div>
       </div>
     );
@@ -100,14 +102,12 @@ export function PaymentWidget({ orderCode, onPaid }: { orderCode: string; onPaid
       <div className="sf-card mt-4 p-5 text-left">
         <p className="font-semibold text-[var(--sf-paper)]">Pasarela de pago no configurada</p>
         <p className="sf-muted mt-1 text-xs">
-          Para activar Wompi define estas variables de entorno (sandbox de tu cuenta de Wompi):
+          Para activar Wompi define tus credenciales desde el panel de administración (Ajustes → Wompi). No es
+          necesario tocar variables de entorno.
         </p>
         <code className="mt-3 block rounded-md border border-dashed border-[var(--sf-line-strong)] bg-[var(--sf-ink-3)] px-3 py-2 font-mono text-[11px] text-[var(--sf-paper-dim)]">
-          {REQUIRED_ENV.join(" · ")}
+          Administración → Ajustes → Credenciales de Wompi
         </code>
-        <p className="sf-muted mt-2 text-xs">
-          Una vez configurada, este panel muestra el botón de pago de Wompi (Web Checkout hospedado).
-        </p>
         <button
           type="button"
           onClick={simulateDemo}
@@ -125,8 +125,10 @@ export function PaymentWidget({ orderCode, onPaid }: { orderCode: string; onPaid
   }
 
   const totalLabel = formatPrice(data.total ?? 0, data.currency ?? "COP");
+  const hasRedirect = data.checkout.fields.some((f) => f.name === "redirect-url");
 
   return (
+    <>
     <form action={data.checkout.action} method="GET" className="sf-card mt-6 p-5 text-left">
       <div className="flex items-center gap-2">
         <span className="text-[var(--sf-gold)]">✓</span>
@@ -143,9 +145,22 @@ export function PaymentWidget({ orderCode, onPaid }: { orderCode: string; onPaid
         Pagar con Wompi ({totalLabel})
       </button>
       <p className="sf-muted mt-3 text-xs">
-        Referencia de pago: <span className="font-mono text-[var(--sf-paper)]">{orderCode}</span>. Una vez pagado, te
-        redirigiremos para confirmar tu compra.
+        Referencia de pago: <span className="font-mono text-[var(--sf-paper)]">{orderCode}</span>.{" "}
+        {hasRedirect
+          ? "Una vez pagado, te redirigiremos para confirmar tu compra."
+          : "Una vez pagado, Wompi confirmará la operación; vuelve aquí para verificar tu compra."}
       </p>
     </form>
+    {!hasRedirect && (
+      <div className="sf-muted mt-3 text-center text-xs">
+        <Link
+          href={`/checkout/payment-result?order=${orderCode}`}
+          className="font-semibold underline underline-offset-2"
+        >
+          Ver estado de mi compra
+        </Link>
+      </div>
+    )}
+    </>
   );
 }

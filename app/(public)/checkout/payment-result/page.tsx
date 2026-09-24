@@ -13,7 +13,7 @@ export default async function PaymentResultPage({
     <div className="sf-fabric relative min-h-[60vh]">
       <div className="sf-wrap flex justify-center py-16">
         <div className="w-full max-w-lg">
-          <PaymentResultClient orderCode={order} />
+          <PaymentResultClient orderCode={order} initialResult={result} />
           {result && (
             <p className="sf-muted mt-5 text-center text-xs">Resultado de la transacción: {result}</p>
           )}

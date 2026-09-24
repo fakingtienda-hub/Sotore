@@ -4,72 +4,56 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { ensureOrderEntitlements } from "@/lib/server/entitlements";
 import { claimCouponForApprovedOrder } from "@/lib/server/coupon-usage";
 import { setOrderTokenCookie, ownerMatchesOrder } from "@/lib/server/order-ownership";
+import { rateLimit } from "@/lib/server/rate-limit";
 import { getWompiConfig } from "@/lib/server/wompi";
 import { getSession } from "@/lib/auth/session";
-import { auth } from "@/lib/auth/server";
 import { serverEnv } from "@/lib/serverEnv";
+import { orderExpiresAt, expireStalePendingOrders } from "@/lib/server/order-expiry";
 
-async function setBuyerSessionCookie(userId: string) {
+async function createOrderAccessVerification(userId: string): Promise<string | null> {
   const [user] = await db
     .select({ email: schema.users.email, name: schema.users.name })
     .from(schema.users)
     .where(eq(schema.users.id, userId))
     .limit(1);
-  if (!user) return;
+  if (!user?.email) return null;
 
-  const ctx = await auth.$context;
   const token = randomBytes(24).toString("base64url");
-  await ctx.internalAdapter.createVerificationValue({
+  await db.insert(schema.verifications).values({
+    id: randomUUID(),
     identifier: token,
     value: JSON.stringify({ email: user.email, name: user.name ?? "" }),
     expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   });
 
+  // El browser navega directamente al endpoint oficial de verify: ahí Better
+  // Auth valida el token, crea la sesión y guarda su cookie SOLA (sin
+  // intermediar el Set-Cookie desde una Server Action, que en Next no se
+  // propaga de forma fiable). El callbackURL nos devuelve a /library.
   const url = new URL("/api/auth/magic-link/verify", serverEnv.appUrl);
   url.searchParams.set("token", token);
   url.searchParams.set("callbackURL", "/library");
-  const res = await auth.handler(new Request(url));
-
-  const cookieStore = await cookies();
-  const setCookieEntries =
-    typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
-  for (const entry of setCookieEntries) {
-    const cookiePart = entry.split(";")[0].trim();
-    const eqIdx = cookiePart.indexOf("=");
-    if (eqIdx === -1) continue;
-    const name = cookiePart.slice(0, eqIdx).trim();
-    if (!name.startsWith("fakingstore")) continue;
-    let rawValue = cookiePart.slice(eqIdx + 1).trim();
-    if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
-      rawValue = rawValue.slice(1, -1);
-    }
-    let value: string;
-    try {
-      value = decodeURIComponent(rawValue);
-    } catch {
-      value = rawValue;
-    }
-    cookieStore.set(name, value, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      secure: serverEnv.isProd,
-      maxAge: 7 * 24 * 60 * 60,
-    });
-  }
+  return url.toString();
 }
 
 const checkoutSchema = z.object({
   slug: z.string().trim().min(1).max(200),
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(255),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\d{6,15}$/, "El teléfono debe contener entre 6 y 15 dígitos.")
+    .optional()
+    .or(z.literal("")),
+  phonePrefix: z.string().trim().max(8).optional(),
   couponCode: z.string().trim().max(60).optional(),
 });
 
@@ -169,8 +153,9 @@ export async function getPublishedProductBySlug(slug: string) {
 // Producto elegido EXPRESAMENTE para vitrina (destacado / CTA del hero): se
 // muestra su imagen y precio aunque siga en borrador (misma regla que el tema:
 // la elección del admin manda). Para COMPRAR sí se exige publicado
-// (getPublishedProductBySlug / createPendingOrder). Se seleccionan solo los
-// campos que el panel de vitrina usa (sin zipKey/seo/peso del producto).
+// (getPublishedProductBySlug / createPendingOrder), por eso se expone `status`:
+// la landing oculta los CTA de compra cuando el producto no está publicado.
+// Se seleccionan solo los campos que el panel de vitrina usa (sin zipKey/seo/peso).
 export async function getLandingShowcaseProduct(slug: string) {
   const rows = await db
     .select({
@@ -182,6 +167,7 @@ export async function getLandingShowcaseProduct(slug: string) {
       currency: schema.products.currency,
       coverImageUrl: schema.products.coverImageUrl,
       theme: schema.products.theme,
+      status: schema.products.status,
     })
     .from(schema.products)
     .where(eq(schema.products.slug, slug))
@@ -189,7 +175,12 @@ export async function getLandingShowcaseProduct(slug: string) {
   return rows[0] ?? null;
 }
 
-async function getOrCreateGuestUser(name: string, email: string): Promise<string> {
+async function getOrCreateGuestUser(
+  name: string,
+  email: string,
+  phone?: string,
+  phonePrefix?: string,
+): Promise<string> {
   const normalized = email.trim().toLowerCase();
   const existing = await db
     .select({ id: schema.users.id })
@@ -197,7 +188,18 @@ async function getOrCreateGuestUser(name: string, email: string): Promise<string
     .where(eq(schema.users.email, normalized))
     .limit(1);
 
-  if (existing.length > 0) return existing[0].id;
+  if (existing.length > 0) {
+    // El teléfono que el comprador acaba de escribir es la fuente más
+    // reciente: se actualiza para que el pre-llenado de Wompi siempre use el
+    // contacto vigente.
+    if (phone) {
+      await db
+        .update(schema.users)
+        .set({ phone, phonePrefix: phonePrefix ?? null, updatedAt: new Date() })
+        .where(eq(schema.users.id, existing[0].id));
+    }
+    return existing[0].id;
+  }
 
   const id = randomUUID();
   await db
@@ -209,6 +211,8 @@ async function getOrCreateGuestUser(name: string, email: string): Promise<string
       emailVerified: false,
       role: "customer",
       status: "active",
+      phone: phone || null,
+      phonePrefix: phonePrefix || null,
     })
     .onConflictDoNothing({ target: schema.users.email });
 
@@ -235,14 +239,21 @@ export async function createPendingOrder(input: unknown): Promise<{
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((e) => e.message).join("; ") };
   }
-  const { slug, name, email, couponCode } = parsed.data;
+  const { slug, name, email, phone, phonePrefix, couponCode } = parsed.data;
+
+  const reqHeaders = await headers();
+  const ip = reqHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = rateLimit(`create-order:${ip}`, 10, 60_000);
+  if (!rl.ok) {
+    return { ok: false, error: "Demasiados intentos. Espera un momento e inténtalo de nuevo." };
+  }
 
   const product = await getPublishedProductBySlug(slug);
   if (!product) {
     return { ok: false, error: "El producto no está disponible." };
   }
 
-  const userId = await getOrCreateGuestUser(name, email);
+  const userId = await getOrCreateGuestUser(name, email, phone || undefined, phonePrefix || undefined);
 
   let discount = 0;
   let couponId: string | null = null;
@@ -277,6 +288,7 @@ export async function createPendingOrder(input: unknown): Promise<{
       couponCode: couponUsedCode,
       couponId,
       ownerToken,
+      expiresAt: orderExpiresAt(),
     });
     await tx.insert(schema.orderItems).values({
       orderId,
@@ -304,7 +316,8 @@ export async function createPendingOrder(input: unknown): Promise<{
  * titularidad de la orden (cookie de titularidad + ownerToken en BD).
  */
 export async function simulateDemoPayment(orderCode: string): Promise<{ ok: boolean; error?: string }> {
-  if (serverEnv.isProd || getWompiConfig().configured) {
+  const config = await getWompiConfig();
+  if (serverEnv.isProd || config.configured) {
     return {
       ok: false,
       error: "El pago demo solo está disponible en desarrollo sin Wompi configurada.",
@@ -348,8 +361,6 @@ export async function simulateDemoPayment(orderCode: string): Promise<{ ok: bool
 
   await claimCouponForApprovedOrder(order.id);
 
-  await setBuyerSessionCookie(order.userId);
-
   revalidatePath("/admin/sales");
   return { ok: true };
 }
@@ -357,21 +368,27 @@ export async function simulateDemoPayment(orderCode: string): Promise<{ ok: bool
 /**
  * Estado real de una orden en el camino de pago. Lo llama la página
  * `/checkout/payment-result` (a la que Wompi redirige al comprador) para no
- * dejar al usuario en "verificación" infinita: se consulta la BD y, si la
- * orden ya está aprobada, se crea la sesión del comprador (auto-login) para
- * que "Ir a mi biblioteca" funcione sin depender de un magic link. Administra
- * titularidad vía la cookie de la orden (IDOR).
+ * dejar al usuario en "verificación" infinita. Administra titularidad vía la
+ * cookie de la orden (IDOR). NO crea sesiones aquí: el acceso a la biblioteca
+ * se concede con `getLibraryAccessUrl` (navegando al verify de Better Auth).
  */
 export async function getCheckoutOrderStatus(
   orderCode: string,
 ): Promise<{ ok: true; status: string } | { ok: false; error?: string }> {
+  const rl = rateLimit(`order-status:${orderCode}`, 60, 60_000);
+  if (!rl.ok) {
+    return { ok: false, error: "Demasiadas consultas de estado." };
+  }
+
+  await expireStalePendingOrders();
+
   const ownsOrder = await ownerMatchesOrder(orderCode);
   if (!ownsOrder) {
     return { ok: false, error: "No tienes acceso a esa orden." };
   }
 
   const [order] = await db
-    .select({ status: schema.orders.status, userId: schema.orders.userId })
+    .select({ status: schema.orders.status })
     .from(schema.orders)
     .where(eq(schema.orders.code, orderCode))
     .limit(1);
@@ -380,15 +397,52 @@ export async function getCheckoutOrderStatus(
     return { ok: false, error: "La orden no existe." };
   }
 
-  if (order.status === "approved") {
-    // Solo auto-login cuando no hay sesión o pertenece a otro usuario; si ya
-    // hay sesión de este comprador no se crean verificaciones/sesiones extra
-    // en cada poll.
-    const session = await getSession();
-    if (!session?.user || session.user.id !== order.userId) {
-      await setBuyerSessionCookie(order.userId);
-    }
+  return { ok: true, status: order.status };
+}
+
+/**
+ * URL de acceso a la biblioteca para una orden aprobada. Solo el titular de la
+ * orden (cookie de orden) puede pedirla. Si el comprador ya tiene sesión
+ * activa devuelve `/library` directo; si no, emite una verificación de magic
+ * link single-use (10 min) y devuelve la URL oficial de verify para que el
+ * navegador cree la sesión con su propio Set-Cookie.
+ */
+export async function getLibraryAccessUrl(
+  orderCode: string,
+): Promise<{ ok: true; url: string } | { ok: false; error?: string }> {
+  const rl = rateLimit(`library-access:${orderCode}`, 60, 60_000);
+  if (!rl.ok) {
+    return { ok: false, error: "Demasiadas solicitudes. Intenta en unos segundos." };
   }
 
-  return { ok: true, status: order.status };
+  await expireStalePendingOrders();
+
+  const ownsOrder = await ownerMatchesOrder(orderCode);
+  if (!ownsOrder) {
+    return { ok: false, error: "No tienes acceso a esa orden." };
+  }
+
+  const [order] = await db
+    .select({ userId: schema.orders.userId, status: schema.orders.status })
+    .from(schema.orders)
+    .where(eq(schema.orders.code, orderCode))
+    .limit(1);
+
+  if (!order) {
+    return { ok: false, error: "La orden no existe." };
+  }
+  if (order.status !== "approved") {
+    return { ok: false, error: "El pago todavía no se ha confirmado." };
+  }
+
+  const session = await getSession();
+  if (session?.user?.id === order.userId) {
+    return { ok: true, url: "/library" };
+  }
+
+  const url = await createOrderAccessVerification(order.userId);
+  if (!url) {
+    return { ok: false, error: "No se pudo iniciar sesión automáticamente." };
+  }
+  return { ok: true, url };
 }

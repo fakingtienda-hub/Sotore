@@ -17,6 +17,8 @@ export const users = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     role: varchar("role", { length: 20 }).notNull().default("customer"),
     status: varchar("status", { length: 20 }).notNull().default("active"),
+    phone: varchar("phone", { length: 30 }),
+    phonePrefix: varchar("phone_prefix", { length: 8 }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   },
   (t) => [uniqueIndex("users_email_idx").on(t.email)],
@@ -197,6 +199,7 @@ export const orders = pgTable(
     gatewayStatus: varchar("gateway_status", { length: 40 }),
     gatewayPayload: jsonb("gateway_payload"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -334,12 +337,16 @@ export const landingBlocks = pgTable(
   (t) => [index("landing_blocks_section_idx").on(t.section)],
 );
 
-export const storeSettings = pgTable("store_settings", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  key: varchar("key", { length: 80 }).notNull(),
-  value: jsonb("value").notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const storeSettings = pgTable(
+  "store_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    key: varchar("key", { length: 80 }).notNull(),
+    value: jsonb("value").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("store_settings_key_idx").on(t.key)],
+);
 
 export const events = pgTable(
   "events",

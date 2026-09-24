@@ -12,7 +12,15 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "diag:admin": "tsx scripts/diag-admin.ts",
+    "reset:admin-password": "tsx scripts/reset-admin-password.ts",
+    "backfill:order-tokens": "tsx scripts/backfill-order-tokens.ts",
+    "verify:webhook": "tsx scripts/verify-wompi-checksum.ts",
+    "verify:ownership": "tsx scripts/verify-order-ownership.ts",
+    "verify:order-expiry": "tsx scripts/verify-order-expiry.ts",
+    "verify:media-policy": "tsx scripts/verify-media-policy.ts",
+    "verify:crm-currency": "tsx scripts/verify-crm-currency.ts"
   },
   "dependencies": {
     "@fastify/busboy": "^3.2.2",

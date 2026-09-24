@@ -129,7 +129,17 @@ export function AutosaveField({
 
   const control =
     as === "select" ? (
-      <select {...common} onChange={(e) => handleChange(e.target.value)}>
+      <select
+        {...common}
+        onFocus={() => {
+          focusedRef.current = true;
+        }}
+        onBlur={(e) => {
+          focusedRef.current = false;
+          runSave(e.target.value);
+        }}
+        onChange={(e) => handleChange(e.target.value)}
+      >
         {children}
       </select>
     ) : as === "textarea" ? (

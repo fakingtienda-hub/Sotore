@@ -67,7 +67,11 @@ export default async function AdminCustomersPage({
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-foreground">{c.orderCount}</td>
-                  <td className="px-4 py-3 font-medium text-foreground">{formatPrice(c.totalSpent)}</td>
+                  <td className="px-4 py-3 font-medium text-foreground">
+                    {c.spending.length > 0
+                      ? c.spending.map((s) => formatPrice(s.total, s.currency)).join(" · ")
+                      : "—"}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {c.lastPurchaseAt ? formatDate(c.lastPurchaseAt) : "—"}
                   </td>

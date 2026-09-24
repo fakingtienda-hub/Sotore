@@ -109,6 +109,28 @@ export async function buildProductPackZip(
   }
 }
 
+/** Generación single-flight por producto: las peticiones simultáneas del pack
+ *  comparten la misma build en curso en vez de comprimir el producto N veces
+ *  (cada build lee y repliega todos los archivos). Sin memoria extra: una
+ *  Promise por producto solo durante la generación. */
+const inflightBuilds = new Map<
+  string,
+  Promise<{ ok: boolean; error?: string; sizeBytes?: number }>
+>();
+
+export function getOrBuildProductPackZip(
+  productId: string,
+): Promise<{ ok: boolean; error?: string; sizeBytes?: number }> {
+  let task = inflightBuilds.get(productId);
+  if (!task) {
+    task = buildProductPackZip(productId).finally(() => {
+      inflightBuilds.delete(productId);
+    });
+    inflightBuilds.set(productId, task);
+  }
+  return task;
+}
+
 /** Invalida el ZIP cacheado: elimina el archivo y deja `zipKey` en null para
  *  que las próximas peticiones del pack lo regeneren bajo demanda. Se llama
  *  cada vez que cambian los archivos/carpetas del producto. */

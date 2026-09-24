@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { getCheckoutOrderStatus } from "@/lib/server/actions/checkout";
+import { getCheckoutOrderStatus, getLibraryAccessUrl } from "@/lib/server/actions/checkout";
 
 const POLL_INTERVAL_MS = 4000;
 const MAX_POLLS = 30;
 
 const TERMINAL_STATUSES = new Set(["declined", "error", "voided", "expired"]);
+const TERMINAL_RESULT_CODES = new Set(["DECLINED", "VOIDED", "ERROR", "REJECTED", "EXPIRED"]);
 
 type PollResult = { kind: "ok"; status: string } | { kind: "error"; message: string };
 
@@ -19,13 +20,43 @@ const TERMINAL_MESSAGE: Record<string, string> = {
   error: "El pago fue rechazado, anulado o falló.",
 };
 
-export function PaymentResultClient({ orderCode }: { orderCode?: string }) {
+export function PaymentResultClient({
+  orderCode,
+  initialResult,
+}: {
+  orderCode?: string;
+  initialResult?: string;
+}) {
+  const declinedByResult =
+    initialResult != null && TERMINAL_RESULT_CODES.has(initialResult.toUpperCase());
   const [result, setResult] = useState<PollResult | null>(null);
   const [polls, setPolls] = useState(0);
   const [runId, setRunId] = useState(0);
+  const [libraryUrl, setLibraryUrl] = useState<string | null>(null);
+
+  const approved = result?.kind === "ok" && result.status === "approved";
+
+  useEffect(() => {
+    if (!approved || !orderCode) return;
+
+    let cancelled = false;
+    getLibraryAccessUrl(orderCode)
+      .then((res) => {
+        if (!cancelled) setLibraryUrl(res.ok ? res.url : "/library");
+      })
+      .catch(() => {
+        if (!cancelled) setLibraryUrl("/library");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [approved, orderCode]);
 
   useEffect(() => {
     if (!orderCode) return;
+    // Wompi redirige con el resultado final del intento: si es terminal, no
+    // tiene sentido seguir preguntando (un DECLINED no se convierte en aprobado).
+    if (declinedByResult) return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -51,13 +82,13 @@ export function PaymentResultClient({ orderCode }: { orderCode?: string }) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [orderCode, runId]);
+  }, [orderCode, runId, declinedByResult]);
 
   const missingCode = !orderCode;
   const okStatus = !missingCode && result?.kind === "ok" ? result.status : null;
   const requestError = !missingCode && result?.kind === "error" ? result.message : null;
-  const approved = okStatus === "approved";
-  const terminal = okStatus !== null && TERMINAL_STATUSES.has(okStatus);
+  const terminal =
+    declinedByResult || (okStatus !== null && TERMINAL_STATUSES.has(okStatus));
   const stillWaiting = !requestError && !approved && !terminal && !missingCode;
   const stopped = stillWaiting && polls >= MAX_POLLS;
 
@@ -72,7 +103,9 @@ export function PaymentResultClient({ orderCode }: { orderCode?: string }) {
   const body = approved ? (
     "Confirmamos tu pago y tu compra ya está lista para descargar desde tu biblioteca."
   ) : terminal ? (
-    (okStatus && TERMINAL_MESSAGE[okStatus]) ?? "El pago no pudo completarse."
+    (declinedByResult
+      ? TERMINAL_MESSAGE.declined
+      : (okStatus && TERMINAL_MESSAGE[okStatus])) ?? "El pago no pudo completarse."
   ) : requestError ? (
     requestError
   ) : stopped ? (
@@ -104,9 +137,15 @@ export function PaymentResultClient({ orderCode }: { orderCode?: string }) {
 
       <div className="mt-7 flex items-center justify-center gap-3 flex-wrap">
         {approved ? (
-          <Link href="/library" className="sf-btn">
-            Ir a mi biblioteca
-          </Link>
+          libraryUrl ? (
+            <a href={libraryUrl} className="sf-btn">
+              Ir a mi biblioteca
+            </a>
+          ) : (
+            <Link href="/library" className="sf-btn">
+              Ir a mi biblioteca
+            </Link>
+          )
         ) : terminal || requestError || missingCode ? (
           <Link href="/" className="sf-btn sf-btn-ghost">
             Volver al inicio

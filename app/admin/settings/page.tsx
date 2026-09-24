@@ -1,10 +1,11 @@
-import { getStoreSettings } from "@/lib/server/actions/settings";
+import { getWompiSettings, getStoreSettings } from "@/lib/server/actions/settings";
 import { SettingsForm } from "./_components/settings-form";
+import { WompiSettingsForm } from "./_components/wompi-settings-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
-  const settings = await getStoreSettings();
+  const [settings, wompi] = await Promise.all([getStoreSettings(), getWompiSettings()]);
 
   return (
     <div>
@@ -13,6 +14,7 @@ export default async function AdminSettingsPage() {
         Datos generales de la tienda, credenciales de pago y redes sociales.
       </p>
       <SettingsForm initial={settings} />
+      <WompiSettingsForm initial={wompi} />
     </div>
   );
 }

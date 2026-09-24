@@ -7,6 +7,7 @@ import * as schema from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
 import { mimeFor, storage, StorageError } from "@/lib/server/storage";
 import { rateLimit } from "@/lib/server/rate-limit";
+import { isInlineSafeMime } from "@/lib/server/media-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -92,10 +93,13 @@ export async function GET(
     storedMime && storedMime !== "application/octet-stream" && storedMime !== "text/plain"
       ? storedMime
       : derivedMime ?? storedMime ?? "application/octet-stream";
+  // Solo los tipos sin capacidad de ejecución se sirven inline (SVG/HTML/office
+  // como adjunto aunque la BD diga otro MIME; ver media-policy.ts).
+  const disposition = isInlineSafeMime(contentType) ? "inline" : "attachment";
   const baseHeaders: Record<string, string> = {
     "Content-Type": contentType,
     "Accept-Ranges": "bytes",
-    "Content-Disposition": "inline",
+    "Content-Disposition": disposition,
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "private, max-age=3600",
   };

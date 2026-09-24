@@ -29,7 +29,8 @@ const productInputSchema = z.object({
   description: z.string().trim().max(10000).optional(),
   price: priceSchema,
   compareAtPrice: priceSchema.optional().nullable(),
-  currency: z.enum(["COP", "USD", "MXN", "EUR"]).default("COP"),
+  // Wompi (Colombia) solo procesa COP: la tienda vende únicamente en pesos colombianos.
+  currency: z.literal("COP").default("COP"),
   theme: z.string().trim().refine(isLandingTheme, { message: "Apariencia de la landing inválida." }).default(DEFAULT_LANDING_THEME),
   categoryId: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(12).optional(),
@@ -170,6 +171,7 @@ export async function createProduct(input: unknown): Promise<{ ok: boolean; erro
       tags: data.tags ?? [],
       theme: data.theme,
       status: data.status,
+      publishedAt: data.status === "published" ? new Date() : null,
       coverImageUrl: data.coverImageUrl ?? null,
     })
     .returning({ id: schema.products.id });
@@ -198,7 +200,10 @@ export async function updateProduct(id: string, input: unknown): Promise<{ ok: b
       ...(data.currency !== undefined && { currency: data.currency }),
       ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
       ...(data.tags !== undefined && { tags: data.tags }),
-      ...(data.status !== undefined && { status: data.status }),
+      ...(data.status !== undefined && {
+        status: data.status,
+        ...(data.status === "published" ? { publishedAt: new Date() } : {}),
+      }),
       ...(data.coverImageUrl !== undefined && { coverImageUrl: data.coverImageUrl }),
       ...(data.theme !== undefined && { theme: data.theme }),
       updatedAt: new Date(),

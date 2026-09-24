@@ -9,7 +9,6 @@ import { AutosaveField } from "@/app/admin/_components/autosave-field";
 function toForm(s: StoreSettings) {
   return {
     storeName: s.storeName,
-    currency: s.currency,
     contactEmail: s.contactEmail,
     wompiPublicKey: s.wompiPublicKey,
     socials: {
@@ -81,12 +80,9 @@ export function SettingsForm({ initial }: { initial: StoreSettings }) {
           <legend className="font-display text-lg font-semibold">Datos de la tienda</legend>
           {field("storeName", "Nombre de la tienda")}
           {field("contactEmail", "Email de contacto", "email")}
-          {field("currency", "Moneda (código ISO 4217, ej: COP, USD, MXN)")}
-        </fieldset>
-
-        <fieldset className="space-y-4">
-          <legend className="font-display text-lg font-semibold">Pagos (Wompi)</legend>
-          {field("wompiPublicKey", "Public key de Wompi")}
+          <p className="text-xs text-muted-foreground">
+            Moneda: COP (peso colombiano) — Wompi solo procesa COP.
+          </p>
         </fieldset>
 
         <fieldset className="space-y-4">

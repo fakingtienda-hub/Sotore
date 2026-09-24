@@ -6,7 +6,8 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
 import { storage, StorageError } from "@/lib/server/storage";
-import { buildProductPackZip } from "@/lib/server/pack";
+import { getOrBuildProductPackZip } from "@/lib/server/pack";
+import { rateLimit } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,19 @@ export async function GET(
 ) {
   const { productId } = await ctx.params;
 
-  // --- 1) Autenticación ---------------------------------------------------
+  // --- 0) Rate limit por usuario+producto (la generación es costosa) -------
   const session = await getSession();
   if (!session?.user) {
     return Response.json({ error: "Debes iniciar sesión para descargar." }, { status: 401 });
   }
   const userId = session.user.id;
+  const limiter = rateLimit(`pack:${userId}:${productId}`, 10, 60_000);
+  if (!limiter.ok) {
+    return Response.json(
+      { error: "Demasiadas peticiones. Intenta de nuevo en unos instantes." },
+      { status: 429, headers: { "Retry-After": String(limiter.retryAfter ?? 60) } },
+    );
+  }
 
   // --- 2) Producto + compra activa (los admins pueden probarlo sin compra) --
   const [product] = await db
@@ -84,9 +92,9 @@ export async function GET(
     }
   }
 
-  // --- 4) Generar el pack al vuelo si aún no existe ------------------------
+  // --- 4) Generar el pack al vuelo si aún no existe (single-flight) --------
   if (!product.zipKey) {
-    const result = await buildProductPackZip(productId);
+    const result = await getOrBuildProductPackZip(productId);
     if (!result.ok) {
       return Response.json({ error: result.error ?? "No hay archivos para comprimir." }, { status: 404 });
     }

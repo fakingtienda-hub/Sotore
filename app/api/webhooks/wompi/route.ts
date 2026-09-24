@@ -1,5 +1,3 @@
-import { createHmac } from "node:crypto";
-
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
@@ -7,7 +5,8 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { ensureOrderEntitlements, revokeOrderEntitlements } from "@/lib/server/entitlements";
 import { claimCouponForApprovedOrder, releaseCouponForOrder } from "@/lib/server/coupon-usage";
-import { getWompiConfig } from "@/lib/server/wompi";
+import { getWompiConfig, verifyWompiEventChecksum, type WompiEventPayload } from "@/lib/server/wompi";
+import { expireStalePendingOrders } from "@/lib/server/order-expiry";
 import { wrapEmailLayout, sendEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
@@ -24,12 +23,6 @@ type WompiTransaction = {
   created_at?: string;
   [key: string]: unknown;
 };
-
-function verifySignature(rawBody: string, secret: string, signature: string | null): boolean {
-  if (!signature) return false;
-  const expected = createHmac("sha256", secret).update(rawBody, "utf8").digest("hex");
-  return signature === expected;
-}
 
 async function sendApprovedEmail(order: schema.Order) {
   const [user] = await db
@@ -61,17 +54,14 @@ async function sendApprovedEmail(order: schema.Order) {
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
-  const signature = request.headers.get("x-event-signature");
+  const headerChecksum = request.headers.get("x-event-checksum");
 
-  const config = getWompiConfig();
+  const config = await getWompiConfig();
   if (!config.eventsSecret) {
     return Response.json(
       { error: "WOMPI_EVENTS_SECRET no configurado; webhook desactivado." },
       { status: 503 },
     );
-  }
-  if (!verifySignature(rawBody, config.eventsSecret, signature)) {
-    return Response.json({ error: "Firma del webhook inválida." }, { status: 401 });
   }
 
   let payload: unknown;
@@ -80,8 +70,13 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "JSON inválido." }, { status: 400 });
   }
+  const eventPayload = payload as WompiEventPayload;
+  const checksum = eventPayload.signature?.checksum ?? headerChecksum;
+  if (!checksum || !verifyWompiEventChecksum(eventPayload, config.eventsSecret, checksum)) {
+    return Response.json({ error: "Firma del webhook inválida." }, { status: 401 });
+  }
 
-  const body = payload as { event?: string; data?: { transaction?: WompiTransaction } };
+  const body = eventPayload as unknown as { event?: string; data?: { transaction?: WompiTransaction } };
   const transaction = body.data?.transaction;
   if (body.event !== TX_UPDATED || !transaction) {
     return Response.json({ ok: true, ignored: "evento no procesado" });
@@ -91,6 +86,8 @@ export async function POST(request: Request) {
   if (!reference) {
     return Response.json({ ok: true, ignored: "sin referencia" });
   }
+
+  await expireStalePendingOrders();
 
   const [order] = await db
     .select()
@@ -161,21 +158,19 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, granted: delivered.granted });
     }
 
-    // La orden ya estaba processada: auto-reparamos entregas que pudieron
+    // La orden ya estaba procesada: auto-reparamos entregas que pudieron
     // fallar en un intento anterior (ensure es idempotente y no reinicia el
-    // reloj de minMinutesAfterPayment de compras ya activas).
+    // reloj de minMinutesAfterPayment de compras ya activas). IMPORTANTE: NO
+    // se sobrescribe `gatewayReference` con la transacción entrante — la
+    // canónica es la primera aprobada (la que generó las entregas); cambiarla
+    // rompería el guard de revocación del estado terminal (una anulación de
+    // OTRA transacción dejaría de reconocerse, oikrevokaría la equivocada).
     const [recheck] = await db
       .select({ status: schema.orders.status })
       .from(schema.orders)
       .where(eq(schema.orders.id, order.id))
       .limit(1);
     if (recheck?.status === "approved") {
-      if (order.gatewayReference !== txId) {
-        await db
-          .update(schema.orders)
-          .set({ gatewayReference: txId, updatedAt: new Date() })
-          .where(eq(schema.orders.id, order.id));
-      }
       const delivered = await ensureOrderEntitlements(order.id);
       await claimCouponForApprovedOrder(order.id);
       return Response.json({

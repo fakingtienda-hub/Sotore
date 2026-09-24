@@ -119,14 +119,14 @@
 .storefront[data-sf-theme="premium"] {
   /* Fondo de la landing un poco mÃ¡s oscuro que `--sf-ink` (#0a0d13 â†’ #06080b).
      Se sobreescribe aquÃ­ (solo en premium) para no tocar el token `--sf-ink`,
-     que tambiÃ©n usan botones `.sf-btn-ink` y la barra de compra. */
+     que tambiÃ©n usa la barra de compra. */
   background-color: #06080b;
   background-image:
     radial-gradient(1100px 520px at 80% -8%, rgba(228, 166, 60, 0.11), transparent 62%),
     radial-gradient(900px 460px at 10% -6%, rgba(228, 166, 60, 0.07), transparent 60%);
 }
 
-.storefront[data-sf-theme="premium"] .sf-btn:where(:not(.sf-btn-ghost):not(.sf-btn-ink):not(.sf-btn-paper)) {
+.storefront[data-sf-theme="premium"] .sf-btn:where(:not(.sf-btn-ghost)) {
   background: #18ff00;
   color: #04160a;
   border: 1px solid #0b7e17;
@@ -137,25 +137,13 @@
     0 0 30px -8px rgba(24, 255, 0, 0.75);
 }
 
-.storefront[data-sf-theme="premium"] .sf-btn:where(:not(.sf-btn-ghost):not(.sf-btn-ink):not(.sf-btn-paper)):hover {
+.storefront[data-sf-theme="premium"] .sf-btn:where(:not(.sf-btn-ghost)):hover {
   background: color-mix(in srgb, #18ff00 88%, black);
   color: #04160a;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.35),
     0 8px 0 #0c5c16,
     0 0 44px -6px rgba(24, 255, 0, 0.9);
-}
-
-.storefront[data-sf-theme="premium"] .sf-stitch-box {
-  border-color: color-mix(in srgb, var(--sf-gold) 45%, transparent);
-  box-shadow:
-    0 24px 70px -22px rgba(0, 0, 0, 0.65),
-    0 0 0 1px rgba(228, 166, 60, 0.08),
-    0 0 64px -18px rgba(228, 166, 60, 0.35);
-}
-
-.storefront[data-sf-theme="premium"] .sf-stitch-box::before {
-  border-color: color-mix(in srgb, var(--sf-gold) 55%, transparent);
 }
 
 /* â”€â”€ Ticket de precio como CTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -380,11 +368,6 @@
     overflow-wrap: break-word;
   }
 
-.sf-title-ghost {
-  color: transparent;
-  -webkit-text-stroke: 2px var(--sf-paper);
-}
-
 .sf-title-accent {
   color: var(--sf-brand, var(--sf-thread));
 }
@@ -431,64 +414,8 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   line-height: 1.2;
-  color: var(--sf-paper);
+color: var(--sf-paper);
   white-space: nowrap;
-}
-
-/* Visibilidad de la lista de sellos del hero. El `display` se controla AQUÃ
-   (no con la utilidad `flex`) a propÃ³sito: si el `display` lo pusiera una
-   utilidad de Tailwind, ganarÃ­a a la capa `components` y los `display: none`
-   de abajo serÃ­an inÃºtiles (es la trampa de cascada habitual del proyecto).
-   - MÃ³vil (<640px): OCULTOS, porque apilados empujan la foto ~82px hacia abajo.
-   - Desde 640px: visibles, en vertical al lado derecho de los botones.
-   - Pantallas bajas (<=560px de alto, o sea en HORIZONTAL): ocultos, porque
-     el hero pasa a dos columnas y no hay alto para ellos. */
-.sf-trust {
-  display: none;
-}
-
-@media (min-width: 640px) {
-  .sf-trust {
-    display: flex;
-  }
-}
-
-/* â”€â”€ Costura / pespunte (firma) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-.sf-seam {
-  position: relative;
-  display: block;
-}
-
-.sf-seam::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 2px;
-  background-image: repeating-linear-gradient(
-    90deg,
-    var(--sf-thread) 0 12px,
-    transparent 12px 20px
-  );
-  opacity: 0.9;
-}
-
-.sf-stitch-box {
-  position: relative;
-  background: var(--sf-ink-2);
-  border-radius: 16px;
-  border: 1px solid var(--sf-line);
-}
-
-.sf-stitch-box::before {
-  content: "";
-  position: absolute;
-  inset: 7px;
-  border: 1px dashed var(--sf-line-strong);
-  border-radius: 11px;
-  pointer-events: none;
 }
 
 /* â”€â”€ Botones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -561,27 +488,6 @@
 .sf-btn-ghost:active {
   transform: translateY(2px);
   box-shadow: none;
-}
-
-.sf-btn-ink {
-  background: var(--sf-ink);
-  color: var(--sf-paper);
-  border: 1px solid var(--sf-line-strong);
-  box-shadow: none;
-}
-
-.sf-btn-ink:hover {
-  background: #e5e7eb;
-}
-
-.sf-btn-paper {
-  background: var(--sf-paper);
-  color: var(--sf-ink-2);
-  box-shadow: none;
-}
-
-.sf-btn-paper:hover {
-  background: #2b2e33;
 }
 
 .sf-btn[disabled] {
@@ -773,12 +679,7 @@
   white-space: nowrap;
 }
 
-.sf-sheet-dart {
-  position: absolute;
-  width: 1px;
-  background: var(--sf-thread);
-  opacity: 0.85;
-}
+
 
 /* â”€â”€ Tarjetas de secciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
@@ -1163,10 +1064,6 @@
   color: var(--sf-gold);
 }
 
-.sf-poppy {
-  color: var(--sf-poppy);
-}
-
 .sf-wrap {
   width: 100%;
   max-width: 1120px;
@@ -1284,10 +1181,6 @@
 
   #hero .mt-6 {
     margin-top: 1rem;
-  }
-
-  #hero ul.sf-trust {
-    display: none;
   }
 }
 

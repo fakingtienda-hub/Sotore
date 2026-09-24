@@ -24,10 +24,15 @@ const statusColor: Record<string, string> = {
 export default async function AdminDashboardPage() {
   const stats = await getDashboardStats();
 
+  const revenueLabel =
+    stats.revenueByCurrency.length > 0
+      ? stats.revenueByCurrency.map((r) => formatPrice(r.total, r.currency)).join(" · ")
+      : formatPrice(0);
+
   const cards = [
     {
       label: "Ingresos aprobados",
-      value: formatPrice(stats.totalRevenue),
+      value: revenueLabel,
       sub: `${stats.approvedOrderCount} órdenes aprobadas`,
     },
     { label: "Ventas pendientes", value: String(stats.pendingOrderCount), sub: "Esperando pago" },
@@ -70,7 +75,7 @@ export default async function AdminDashboardPage() {
                 <li key={p.title} className="flex items-center justify-between gap-4">
                   <span className="truncate text-sm font-medium text-foreground">{p.title}</span>
                   <span className="shrink-0 text-sm text-muted-foreground">
-                    {p.quantity} vendidos · {formatPrice(p.revenue)}
+                    {p.quantity} vendidos · {formatPrice(p.revenue, p.currency)}
                   </span>
                 </li>
               ))}

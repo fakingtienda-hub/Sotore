@@ -24,12 +24,12 @@ export type Paginated<T> = {
 };
 
 export type DashboardStats = {
-  totalRevenue: number;
+  revenueByCurrency: { currency: string; total: number }[];
   approvedOrderCount: number;
   pendingOrderCount: number;
   customerCount: number;
   downloadCount: number;
-  topProducts: { title: string; quantity: number; revenue: number }[];
+  topProducts: { title: string; quantity: number; revenue: number; currency: string }[];
   recentOrders: {
     id: string;
     code: string;
@@ -48,17 +48,24 @@ export type CustomerRow = {
   email: string;
   createdAt: Date;
   orderCount: number;
-  totalSpent: number;
+  spending: { currency: string; total: number }[];
   lastPurchaseAt: Date | null;
   downloadCount: number;
 };
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   await requireAdmin();
-  const [revenueRow] = await db
-    .select({ total: sql<number>`COALESCE(SUM(${schema.orders.total}), 0)`.mapWith(Number) })
+  // Ingresos agrupados POR MONEDA: sumar COP+USD+… en un solo número sería
+  // engañoso (decisión ACK: sin tasa de cambio, se agrupa por moneda).
+  const revenueByCurrency = await db
+    .select({
+      currency: schema.orders.currency,
+      total: sql<number>`COALESCE(SUM(${schema.orders.total}), 0)`.mapWith(Number),
+    })
     .from(schema.orders)
-    .where(eq(schema.orders.status, "approved"));
+    .where(eq(schema.orders.status, "approved"))
+    .groupBy(schema.orders.currency)
+    .orderBy(sql`SUM(${schema.orders.total}) DESC`);
 
   const [approvedCount] = await db
     .select({ c: count() })
@@ -82,6 +89,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       title: schema.orderItems.productTitleSnapshot,
       quantity: sql<number>`SUM(${schema.orderItems.quantity})`.mapWith(Number),
       revenue: sql<number>`SUM(${schema.orderItems.unitPrice} * ${schema.orderItems.quantity})`.mapWith(Number),
+      currency: sql<string>`MIN(${schema.orderItems.currency})`,
     })
     .from(schema.orderItems)
     .innerJoin(
@@ -109,7 +117,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .limit(8);
 
   return {
-    totalRevenue: revenueRow?.total ?? 0,
+    revenueByCurrency: revenueByCurrency.map((r) => ({
+      currency: r.currency,
+      total: r.total,
+    })),
     approvedOrderCount: approvedCount?.c ?? 0,
     pendingOrderCount: pendingCount?.c ?? 0,
     customerCount: customerCount?.c ?? 0,
@@ -118,6 +129,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       title: p.title,
       quantity: p.quantity,
       revenue: p.revenue,
+      currency: p.currency,
     })),
     recentOrders: recentOrders.map((o) => ({
       id: o.id,
@@ -174,13 +186,14 @@ export async function listCustomers(
   const orderAgg = await db
     .select({
       userId: schema.orders.userId,
+      currency: schema.orders.currency,
       orderCount: count(),
       totalSpent: sql<number>`COALESCE(SUM(${schema.orders.total}), 0)`.mapWith(Number),
       lastPurchaseAt: sql<Date | null>`MAX(${schema.orders.paidAt})`,
     })
     .from(schema.orders)
     .where(and(eq(schema.orders.status, "approved"), inArray(schema.orders.userId, ids)))
-    .groupBy(schema.orders.userId);
+    .groupBy(schema.orders.userId, schema.orders.currency);
 
   const downloadAgg = await db
     .select({ userId: schema.downloads.userId, c: count() })
@@ -188,7 +201,19 @@ export async function listCustomers(
     .where(inArray(schema.downloads.userId, ids))
     .groupBy(schema.downloads.userId);
 
-  const orderMap = new Map(orderAgg.map((o) => [o.userId, o]));
+  const orderMap = new Map<string, { orderCount: number; lastPurchaseAt: Date | null }>();
+  const spendingMap = new Map<string, { currency: string; total: number }[]>();
+  for (const o of orderAgg) {
+    const agg = orderMap.get(o.userId) ?? { orderCount: 0, lastPurchaseAt: null };
+    agg.orderCount = (agg.orderCount ?? 0) + o.orderCount;
+    if (!agg.lastPurchaseAt || (o.lastPurchaseAt && o.lastPurchaseAt > agg.lastPurchaseAt)) {
+      agg.lastPurchaseAt = o.lastPurchaseAt;
+    }
+    orderMap.set(o.userId, agg);
+    const list = spendingMap.get(o.userId) ?? [];
+    list.push({ currency: o.currency, total: o.totalSpent });
+    spendingMap.set(o.userId, list);
+  }
   const downloadMap = new Map(downloadAgg.map((d) => [d.userId, d.c]));
 
   const rows = users.map((u) => ({
@@ -197,7 +222,7 @@ export async function listCustomers(
     email: u.email,
     createdAt: u.createdAt,
     orderCount: orderMap.get(u.id)?.orderCount ?? 0,
-    totalSpent: orderMap.get(u.id)?.totalSpent ?? 0,
+    spending: spendingMap.get(u.id) ?? [],
     lastPurchaseAt: orderMap.get(u.id)?.lastPurchaseAt ?? null,
     downloadCount: downloadMap.get(u.id) ?? 0,
   }));

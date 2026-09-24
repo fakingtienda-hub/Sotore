@@ -54,11 +54,38 @@ Ver [.env.example](./.env.example) para la lista completa documentada.
 | **5 ✓** | Landing page editable |
 | **6 ✓** | Checkout + cupones |
 | **7 ✓** | Integración Wompi |
-| 8 | Webhook + validación de pagos |
+| **8 ✓** | Webhook + validación de pagos |
 | **9 ✓** | Entrega automática |
 | **10 ✓** | Biblioteca del cliente |
 | **11 ✓** | CRM administrativo |
-| 12 | Emails transaccionales |
+| 12 | Emails transaccionales (console ✓; Resend/SMTP en producción pendiente) |
 | 13 | Analytics + Meta Pixel |
-| 14 | Seguridad + pruebas |
+| **14 ✓** | Seguridad + pruebas (auditoría de arquitectura completa) |
 | 15 | Optimización + deploy |
+
+## Puesta en producción
+
+El código está listo para producción; falta **configuración de entorno**. Checklist:
+
+### Wompi (Web Checkout hospedado — no requiere llave privada)
+| Variable | Requerido |
+|----------|-----------|
+| `WOMPI_ENV` | `production` (para pago real) |
+| `NEXT_PUBLIC_WOMPI_PUBLIC_KEY` | Sí |
+| `WOMPI_INTEGRITY_SECRET` | Sí |
+| `WOMPI_EVENTS_SECRET` | Sí (sin él el webhook responde 503) |
+
+> `WOMPI_PRIVATE_KEY` no se usa en el código; es un sobrante del ejemplo.
+
+### Email
+- `EMAIL_PROVIDER=resend` + `EMAIL_API_KEY` (implementado).
+- `EMAIL_PROVIDER=smtp` **no está implementado** (`lib/email/send.ts` lanza error).
+- `EMAIL_FROM` personalizable.
+
+### Imprescindibles (además de Wompi/email)
+- `NEXT_PUBLIC_APP_URL`: dominio real (lo usan los emails y la `redirect-url` del checkout).
+- `DATABASE_URL`: Postgres gestionado.
+- `AUTH_SECRET` / `BETTER_AUTH_SECRET`: generar uno por entorno; `.env.local` contiene valores versionados.
+- Persistencia del `storage/` local (archivos de producto + miniaturas): el código solo tiene el driver de disco (`LocalStorage`); las credenciales `STORAGE_*` de S3 en `.env.local` están vacías y **no hay cliente S3 implementado**. En producción montar un volumen persistente o implementar S3.
+
+Nota: la BD se gestiona con `npm run db:push` (migraciones); las migraciones de Drizzle solo aplican en bases nuevas viajeras.

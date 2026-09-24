@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useSession } from "@/lib/auth/client";
 import type { RequiredSiteContent } from "@/types/landing";
 
 export function PublicHeader({
@@ -58,9 +59,26 @@ export function PublicHeader({
               ))}
             </ul>
           ) : null}
+          <AccountLink />
         </div>
       </div>
     </header>
+  );
+}
+
+function AccountLink() {
+  const { data, isPending } = useSession();
+  if (isPending) return null;
+  const user = data?.user;
+
+  return user ? (
+    <Link href="/library" className="sf-chip" title={user.email ?? "Mi cuenta"}>
+      Mi biblioteca
+    </Link>
+  ) : (
+    <Link href="/login" className="sf-chip">
+      Iniciar sesión
+    </Link>
   );
 }
 

@@ -10,13 +10,6 @@ import { PRODUCT_STATUSES, LANDING_THEMES } from "@/lib/constants";
 import { AutosaveField } from "@/app/admin/_components/autosave-field";
 import { ProductCoverField } from "./product-cover-field";
 
-const CURRENCIES = [
-  { value: "COP", label: "COP – Peso colombiano" },
-  { value: "USD", label: "USD – Dólar estadounidense" },
-  { value: "MXN", label: "MXN – Peso mexicano" },
-  { value: "EUR", label: "EUR – Euro" },
-];
-
 const STATUS_LABELS: Record<string, string> = {
   draft: "Borrador",
   published: "Publicado",
@@ -31,7 +24,6 @@ type EditValues = {
   description: string | null;
   price: number;
   compareAtPrice: number | null;
-  currency: string;
   theme: string;
   status: string;
   coverImageUrl: string | null;
@@ -73,7 +65,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
       description: fd.get("description") ? String(fd.get("description")) : undefined,
       price: toCents(String(fd.get("price") ?? "")),
       compareAtPrice: fd.get("compareAtPrice") ? toCents(String(fd.get("compareAtPrice"))) : null,
-      currency: String(fd.get("currency") ?? "COP"),
+      currency: "COP",
       theme: String(fd.get("theme") ?? "costura"),
       status: String(fd.get("status") ?? "draft"),
       coverImageUrl: fd.get("coverImageUrl") ? String(fd.get("coverImageUrl")) : null,
@@ -142,20 +134,9 @@ export function ProductForm({ mode, product }: ProductFormProps) {
               className={inputClass}
             />
           </label>
-          <label>
-            <span className="mb-1 block text-sm font-medium text-foreground">Moneda</span>
-            <select
-              name="currency"
-              defaultValue="COP"
-              className={inputClass}
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <span className="mb-1 block text-sm font-medium text-foreground">
+            Moneda: COP (peso colombiano) — Wompi solo procesa COP.
+          </span>
           <label>
             <span className="mb-1 block text-sm font-medium text-foreground">Apariencia de la landing</span>
             <select
@@ -281,23 +262,6 @@ export function ProductForm({ mode, product }: ProductFormProps) {
             onSaved={refresh}
             className={inputClass}
           />
-        </label>
-        <label>
-          <span className="mb-1 block text-sm font-medium text-foreground">Moneda</span>
-          <AutosaveField
-            as="select"
-            value={product?.currency ?? "COP"}
-            saveOnChange
-            onSave={async (v) => save({ currency: v })}
-            onSaved={refresh}
-            className={inputClass}
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </AutosaveField>
         </label>
         <label>
           <span className="mb-1 block text-sm font-medium text-foreground">Apariencia de la landing</span>
