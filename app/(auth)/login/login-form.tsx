@@ -6,6 +6,33 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth/client";
 import { safeNextPath } from "@/lib/client/safe-redirect";
 
+/**
+ * better-auth devuelve mensajes en inglés y, si la petición ni siquiera llega
+ * al servidor, un `TypeError: Failed to fetch` que no dice nada. Traducimos los
+ * casos conocidos para que el mensaje apunte a la causa real.
+ */
+function friendlyAuthError(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+
+  if (/failed to fetch|networkerror|load failed/i.test(raw)) {
+    return "No pudimos conectarnos con el servidor. Revisá tu conexión o recargá la página.";
+  }
+  if (/invalid email or password|invalid credentials|user not found/i.test(raw)) {
+    return "Correo o contraseña incorrectos.";
+  }
+  if (/too many requests|rate limit/i.test(raw)) {
+    return "Demasiados intentos. Esperá un minuto e intentá de nuevo.";
+  }
+  if (/user not allowed|sign up disabled/i.test(raw)) {
+    return "Esta cuenta no puede acceder. Contactá a soporte.";
+  }
+  if (/email not verified/i.test(raw)) {
+    return "Tu correo no está verificado. Revisá tu bandeja de entrada.";
+  }
+  if (raw && raw !== "Failed to fetch") return raw;
+  return fallback;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -26,13 +53,13 @@ export function LoginForm() {
       const { error: apiError } = await signIn.magicLink({ email, callbackURL: next ?? "/library" });
       if (apiError) {
         setStatus("error");
-        setError(apiError.message ?? "No se pudo enviar el enlace.");
+        setError(friendlyAuthError(apiError, "No se pudo enviar el enlace."));
         return;
       }
       setStatus("sent");
     } catch (err) {
       setStatus("error");
-      setError(err instanceof Error ? err.message : "No se pudo enviar el enlace.");
+      setError(friendlyAuthError(err, "No se pudo enviar el enlace."));
     }
   }
 
@@ -44,7 +71,7 @@ export function LoginForm() {
       const { data, error: apiError } = await signIn.email({ email, password });
       if (apiError) {
         setStatus("error");
-        setError(apiError.message ?? "Credenciales inválidas.");
+        setError(friendlyAuthError(apiError, "Credenciales inválidas."));
         return;
       }
       const role = (data?.user as { role?: string } | undefined)?.role ?? "customer";
@@ -52,7 +79,7 @@ export function LoginForm() {
       router.push(next ?? defaultRedirect);
     } catch (err) {
       setStatus("error");
-      setError(err instanceof Error ? err.message : "Credenciales inválidas.");
+      setError(friendlyAuthError(err, "Credenciales inválidas."));
     }
   }
 

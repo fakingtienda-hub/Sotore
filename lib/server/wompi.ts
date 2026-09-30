@@ -106,6 +106,72 @@ export type WompiEventPayload = {
   [key: string]: unknown;
 };
 
+/* ---------------------------------------------------------------------------
+ * Lectura de transacciones (reconciliación).
+ *
+ * Se usa la PUBLIC key, que en Wompi da permiso de lectura de transacciones del
+ * comercio. Estas funciones NUNCA aprueban nada por sí solas: devuelven datos
+ * crudos y quien decide es `approveOrderFromTransaction`. Ante cualquier error
+ * devuelven null / lista vacía para que un fallo de la pasarela no pueda
+ * provocar aprobaciones masivas ni tirones de la app.
+ * ------------------------------------------------------------------------- */
+
+export type WompiTransactionResponse = {
+  id: string;
+  reference?: string;
+  status?: string;
+  amount_in_cents?: number;
+  currency?: string;
+  created_at?: string;
+  [key: string]: unknown;
+};
+
+async function wompiGet(config: WompiConfig, path: string): Promise<unknown> {
+  const res = await fetch(`${config.apiUrl}${path}`, {
+    headers: { Authorization: `Bearer ${config.publicKey}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`Wompi ${path} respondió ${res.status}`);
+  return res.json();
+}
+
+/** Consulta una transacción por id. `null` si no existe o si la API falla. */
+export async function fetchWompiTransaction(
+  config: WompiConfig,
+  transactionId: string,
+): Promise<WompiTransactionResponse | null> {
+  try {
+    const body = (await wompiGet(config, `/transactions/${encodeURIComponent(transactionId)}`)) as {
+      data?: WompiTransactionResponse;
+    };
+    return body?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Transacciones aprobadas/creadas en una ventana temporal, para emparejar
+ * payments cuyo webhook nunca llegó (servidor caído, deploy, reintentos
+ * agotados). Wompi acota la ventana; se pide solo lo necesario.
+ */
+export async function fetchWompiTransactionsSince(
+  config: WompiConfig,
+  since: Date,
+): Promise<WompiTransactionResponse[]> {
+  const from = Math.floor(since.getTime() / 1000);
+  const to = Math.floor(Date.now() / 1000);
+  try {
+    const body = (await wompiGet(config, `/transactions?from=${from}&to=${to}`)) as {
+      data?: WompiTransactionResponse[];
+    };
+    return Array.isArray(body?.data) ? body.data : [];
+  } catch {
+    return [];
+  }
+}
+
 function resolvePath(obj: unknown, path: string): unknown {
   return path.split(".").reduce<unknown>((acc, key) => {
     if (

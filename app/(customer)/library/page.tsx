@@ -4,7 +4,9 @@ import { and, desc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
+import { getLibraryOrderNotice } from "@/lib/server/library-notice";
 import { formatDate, formatPrice } from "@/lib/utils/format";
+import { LibraryOrderNotice } from "./_components/library-order-notice";
 
 export const dynamic = "force-dynamic";
 
@@ -29,18 +31,36 @@ export default async function LibraryPage() {
 
    const active = purchases;
 
+  // Órdenes recientes aún no reflejadas en la biblioteca. Sin esto, un cliente
+  // que pagó y cuya entrega se retrasó leía "no tienes productos · Ir a la
+  // tienda", o sea: la app pidiéndole que pagara otra vez.
+  const notice = await getLibraryOrderNotice(user.id);
+
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 md:px-8">
       <h1 className="font-display text-2xl font-semibold tracking-tight">Mi biblioteca</h1>
       <p className="mt-1 text-sm text-muted-foreground">Tus productos comprados con acceso a descargas.</p>
 
+      {notice ? <LibraryOrderNotice notice={notice} /> : null}
+
       {active.length === 0 ? (
         <div className="mt-12 rounded-2xl border border-border bg-card p-10 text-center">
           <p className="text-7xl opacity-40" aria-hidden>📦</p>
-          <p className="mt-4 text-sm text-muted-foreground">Aún no tienes productos en tu biblioteca.</p>
-          <Link href="/" className="mt-4 inline-block rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-            Ir a la tienda
-          </Link>
+          {notice ? (
+            <>
+              {/* Hay una compra en camino: NO ofrecer comprar otra vez. */}
+              <p className="mt-4 text-sm text-muted-foreground">
+                Tu compra aparecerá aquí en cuanto se active el acceso.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-4 text-sm text-muted-foreground">Aún no tienes productos en tu biblioteca.</p>
+              <Link href="/" className="mt-4 inline-block rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                Ir a la tienda
+              </Link>
+            </>
+          )}
         </div>
       ) : (
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

@@ -174,7 +174,6 @@ export function CheckoutForm({
   const [orderResult, setOrderResult] = useState<{ ok: boolean; orderId?: string; orderCode?: string; error?: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [paid, setPaid] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -211,25 +210,19 @@ export function CheckoutForm({
     }
   }
 
+  // Puente transitorio: la orden se crea y el `PaymentWidget` lleva al comprador
+  // a Wompi por sí solo (cuenta regresiva), sin una pantalla intermedia extra.
   if (orderResult?.ok) {
+    if (!orderResult.orderCode) {
+      return (
+        <div className="sf-card mx-auto max-w-xl p-6 text-center text-sm text-[var(--sf-thread)]">
+          La orden se creó pero no pudimos obtener su código. Escríbenos para ayudarte.
+        </div>
+      );
+    }
     return (
       <div className="mx-auto max-w-xl">
-        {!paid ? (
-          <div className="sf-card p-8 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--sf-thread)] text-2xl font-bold text-white">
-              ✓
-            </div>
-            <h2 className="sf-title mt-5 text-4xl text-[var(--sf-paper)]">Orden creada</h2>
-            <p className="sf-muted mt-3 leading-relaxed">
-              Tu orden quedó registrada como pendiente de pago. Continúa con el pago para recibir el acceso al instante.
-            </p>
-            <p className="mx-auto mt-5 inline-block border-2 border-dashed border-[var(--sf-line-strong)] px-5 py-3 font-mono text-sm font-bold tracking-[0.25em] text-[var(--sf-paper)]">
-              {orderResult.orderCode}
-            </p>
-          </div>
-        ) : null}
-
-        {orderResult.orderCode && <PaymentWidget orderCode={orderResult.orderCode} onPaid={() => setPaid(true)} />}
+        <PaymentWidget orderCode={orderResult.orderCode} autoSubmitSec={6} />
       </div>
     );
   }
@@ -399,7 +392,7 @@ export function CheckoutForm({
             ) : null}
 
             <button type="submit" disabled={pending} className="sf-btn w-full text-lg">
-              {pending ? "Creando orden…" : "Continuar al pago"}
+              {pending ? "Abriendo el pago seguro…" : "Continuar al pago"}
             </button>
             <p className="sf-checkout-hint sf-muted text-center text-xs">
               Sin registro previo. El acceso se envía a tu email tras confirmar el pago.

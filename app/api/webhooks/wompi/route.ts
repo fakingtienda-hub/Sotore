@@ -1,10 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
-import { ensureOrderEntitlements, revokeOrderEntitlements } from "@/lib/server/entitlements";
-import { claimCouponForApprovedOrder, releaseCouponForOrder } from "@/lib/server/coupon-usage";
+import { revokeOrderEntitlements } from "@/lib/server/entitlements";
+import { releaseCouponForOrder } from "@/lib/server/coupon-usage";
+import { approveOrderFromTransaction } from "@/lib/server/order-approval";
 import { getWompiConfig, verifyWompiEventChecksum, type WompiEventPayload } from "@/lib/server/wompi";
 import { expireStalePendingOrders } from "@/lib/server/order-expiry";
 import { wrapEmailLayout, sendEmail } from "@/lib/email/send";
@@ -102,84 +103,45 @@ export async function POST(request: Request) {
 
   const status = transaction.status?.toUpperCase();
   const txId = transaction.id;
-  const updateBase = {
-    gateway: "wompi",
-    gatewayReference: txId,
-    gatewayStatus: status,
-    gatewayPayload: { ...transaction },
-    updatedAt: new Date(),
-  } as const;
 
   if (status === "APPROVED") {
-    // Validar que el pago realmente corresponde a la orden (monto y moneda).
-    // El reference del checkout no protege el monto (solo la firma de
-    // integridad lo hace al crear el checkout), así que un APPROVED con otro
-    // monto NO debe aprobar la orden.
-    const amountOk = transaction.amount_in_cents == null || transaction.amount_in_cents === order.total;
-    const currencyOk = !transaction.currency || transaction.currency.toUpperCase() === order.currency.toUpperCase();
-    if (!amountOk || !currencyOk) {
-      await db
-        .update(schema.orders)
-        .set({
-          gateway: "wompi",
-          gatewayReference: txId,
-          gatewayStatus: status,
-          gatewayPayload: { ...transaction, ignoredReason: "monto o moneda no coinciden" },
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.orders.id, order.id));
+    // Toda la aprobación (validación de monto/moneda, claim atómico,
+    // idempotencia) vive en `approveOrderFromTransaction`, el mismo módulo que
+    // usa la reconciliación: así un pago confirmado por evento y uno confirmado
+    // por consulta a la API se tratan igual.
+    const result = await approveOrderFromTransaction(order, {
+      ...transaction,
+      status,
+    });
+
+    if (result.outcome === "amount_mismatch") {
       return Response.json({ ok: true, ignored: "monto o moneda no coinciden con la orden" });
     }
 
-    // Aprobación atómica: solo una de las dos aprobaciones concurrentes
-    // (o reintentos) consigue reclamar el giro pending→approved.
-    const claimed = await db
-      .update(schema.orders)
-      .set({
-        ...updateBase,
-        status: "approved",
-        paidAt: transaction.created_at ? new Date(transaction.created_at) : new Date(),
-      })
-      .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "pending")))
-      .returning({ id: schema.orders.id });
-
-    if (claimed.length > 0) {
-      const delivered = await ensureOrderEntitlements(order.id);
-      if (!delivered.ok) {
+    if (result.outcome === "granted") {
+      if (!result.deliveryOk) {
+        // 500 para que la pasarela reintente: la orden ya quedó `approved`, y
+        // tanto su reintento como la reconciliación terminan la entrega.
         return Response.json(
-          { error: delivered.reason ?? "No se pudo entregar el producto." },
+          { error: result.reason ?? "No se pudo entregar el producto." },
           { status: 500 },
         );
       }
-      await claimCouponForApprovedOrder(order.id);
       await sendApprovedEmail(order).catch(() => {});
       revalidatePath("/library");
       revalidatePath("/admin/sales");
-      return Response.json({ ok: true, granted: delivered.granted });
+      return Response.json({ ok: true, granted: result.granted });
     }
 
-    // La orden ya estaba procesada: auto-reparamos entregas que pudieron
-    // fallar en un intento anterior (ensure es idempotente y no reinicia el
-    // reloj de minMinutesAfterPayment de compras ya activas). IMPORTANTE: NO
-    // se sobrescribe `gatewayReference` con la transacción entrante — la
-    // canónica es la primera aprobada (la que generó las entregas); cambiarla
-    // rompería el guard de revocación del estado terminal (una anulación de
-    // OTRA transacción dejaría de reconocerse, oikrevokaría la equivocada).
-    const [recheck] = await db
-      .select({ status: schema.orders.status })
-      .from(schema.orders)
-      .where(eq(schema.orders.id, order.id))
-      .limit(1);
-    if (recheck?.status === "approved") {
-      const delivered = await ensureOrderEntitlements(order.id);
-      await claimCouponForApprovedOrder(order.id);
+    if (result.outcome === "already_approved") {
       return Response.json({
         ok: true,
-        granted: delivered.ok ? delivered.granted : 0,
-        existing: delivered.ok ? delivered.existing : 0,
+        granted: result.granted,
+        existing: result.existing,
       });
     }
-    return Response.json({ ok: true, ignored: `orden en estado ${recheck?.status ?? "desconocido"}` });
+
+    return Response.json({ ok: true, ignored: `orden en estado ${result.status ?? "desconocido"}` });
   }
 
   if ((TERMINAL_STATUSES as readonly string[]).includes(status)) {
@@ -195,7 +157,16 @@ export async function POST(request: Request) {
       await releaseCouponForOrder(order.id);
       await db
         .update(schema.orders)
-        .set({ ...updateBase, status: status.toLowerCase() })
+        .set({
+          gateway: "wompi",
+          // Aquí `txId === order.gatewayReference` (es la misma transacción que
+          // aprobó), así que reescribirlo no cambia la transacción canónica.
+          gatewayReference: txId,
+          gatewayStatus: status,
+          gatewayPayload: { ...transaction },
+          updatedAt: new Date(),
+          status: status.toLowerCase(),
+        })
         .where(eq(schema.orders.id, order.id));
       revalidatePath("/admin/sales");
       revalidatePath("/library");

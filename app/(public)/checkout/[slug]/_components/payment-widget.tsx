@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { simulateDemoPayment, getLibraryAccessUrl } from "@/lib/server/actions/checkout";
 import { formatPrice } from "@/lib/utils/format";
@@ -14,12 +14,28 @@ type InitResponse = {
   checkout?: { action: string; fields: { name: string; value: string }[]; redirectUrl: string };
 };
 
-export function PaymentWidget({ orderCode, onPaid }: { orderCode: string; onPaid?: () => void }) {
+export function PaymentWidget({
+  orderCode,
+  onPaid,
+  autoSubmitSec,
+}: {
+  orderCode: string;
+  onPaid?: () => void;
+  /**
+   * Puente transitorio: si se indica, la tarjeta cuenta regresiva y envía el
+   * formulario a Wompi sola (un solo clic desde "Continuar al pago"). Si se
+   * omite, el botón de pago es manual.
+   */
+  autoSubmitSec?: number;
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [data, setData] = useState<InitResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [demoState, setDemoState] = useState<"idle" | "busy" | "done">("idle");
   const [demoError, setDemoError] = useState<string | null>(null);
   const [demoAccessUrl, setDemoAccessUrl] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(autoSubmitSec ?? null);
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +55,23 @@ export function PaymentWidget({ orderCode, onPaid }: { orderCode: string; onPaid
       cancelled = true;
     };
   }, [orderCode]);
+
+  /* La cuenta regresiva solo arranca cuando el formulario ya está montado
+     (`data.checkout` disponible): antes de eso no hay nada que enviar. Al llegar
+     a cero se envía el formulario GET a Wompi (mismo mecanismo que el botón). */
+  useEffect(() => {
+    if (secondsLeft == null || !data?.checkout || leaving) return;
+    const id = setTimeout(() => {
+      if (secondsLeft <= 1) {
+        setSecondsLeft(0);
+        setLeaving(true);
+        formRef.current?.submit();
+      } else {
+        setSecondsLeft(secondsLeft - 1);
+      }
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [secondsLeft, data, leaving]);
 
   async function simulateDemo() {
     if (demoState === "busy") return;
@@ -126,41 +159,93 @@ export function PaymentWidget({ orderCode, onPaid }: { orderCode: string; onPaid
 
   const totalLabel = formatPrice(data.total ?? 0, data.currency ?? "COP");
   const hasRedirect = data.checkout.fields.some((f) => f.name === "redirect-url");
+  const bridge = autoSubmitSec != null;
 
   return (
     <>
-    <form action={data.checkout.action} method="GET" className="sf-card mt-6 p-5 text-left">
-      <div className="flex items-center gap-2">
-        <span className="text-[var(--sf-gold)]">✓</span>
-        <p className="font-semibold text-[var(--sf-paper)]">Pago seguro con Wompi</p>
-      </div>
-      <p className="sf-muted mt-1.5 text-xs">
-        Serás redirigido a la pasarela de Wompi para completar el pago de{" "}
-        <span className="font-semibold text-[var(--sf-paper)]">{totalLabel}</span>.
-      </p>
-      {data.checkout.fields.map((field) => (
-        <input key={field.name} type="hidden" name={field.name} value={field.value} />
-      ))}
-      <button type="submit" className="sf-btn mt-4 w-full text-lg">
-        Pagar con Wompi ({totalLabel})
-      </button>
-      <p className="sf-muted mt-3 text-xs">
-        Referencia de pago: <span className="font-mono text-[var(--sf-paper)]">{orderCode}</span>.{" "}
-        {hasRedirect
-          ? "Una vez pagado, te redirigiremos para confirmar tu compra."
-          : "Una vez pagado, Wompi confirmará la operación; vuelve aquí para verificar tu compra."}
-      </p>
-    </form>
-    {!hasRedirect && (
-      <div className="sf-muted mt-3 text-center text-xs">
-        <Link
-          href={`/checkout/payment-result?order=${orderCode}`}
-          className="font-semibold underline underline-offset-2"
+      <form
+        ref={formRef}
+        action={data.checkout.action}
+        method="GET"
+        className={`sf-card mt-6 p-6 text-center md:p-8${bridge ? "" : " text-left"}`}
+      >
+        {bridge ? (
+          <>
+            <div
+              className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-[var(--sf-line-strong)] border-t-[var(--sf-gold)] motion-reduce:animate-none"
+              aria-hidden
+            />
+            <h2 className="sf-title mt-5 text-3xl text-[var(--sf-paper)]">
+              {leaving ? "Abriendo Wompi…" : "Redirigiendo a Wompi…"}
+            </h2>
+            <p className="sf-muted mx-auto mt-2 max-w-sm text-sm leading-relaxed">
+              Tu orden quedó registrada. Te llevamos a la pasarela segura para completar el pago de{" "}
+              <span className="font-semibold text-[var(--sf-paper)]">{totalLabel}</span>.
+            </p>
+            {!leaving && secondsLeft != null ? (
+              <p className="sf-label mt-4 tabular-nums" aria-live="polite">
+                Continúa solo en {secondsLeft} s
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="text-[var(--sf-gold)]">✓</span>
+              <p className="font-semibold text-[var(--sf-paper)]">Pago seguro con Wompi</p>
+            </div>
+            <p className="sf-muted mt-1.5 text-xs">
+              Serás redirigido a la pasarela de Wompi para completar el pago de{" "}
+              <span className="font-semibold text-[var(--sf-paper)]">{totalLabel}</span>.
+            </p>
+          </>
+        )}
+
+        {data.checkout.fields.map((field) => (
+          <input key={field.name} type="hidden" name={field.name} value={field.value} />
+        ))}
+
+        <button
+          type="submit"
+          onClick={() => setLeaving(true)}
+          disabled={leaving}
+          className="sf-btn mt-6 w-full text-lg"
         >
-          Ver estado de mi compra
-        </Link>
-      </div>
-    )}
+          {leaving
+            ? "Abriendo Wompi…"
+            : bridge
+              ? `Ir a Wompi ahora (${totalLabel})`
+              : `Pagar con Wompi (${totalLabel})`}
+        </button>
+
+        {bridge ? (
+          <p className="mt-5 text-xs text-[var(--sf-muted)]">
+            Tu código de orden es{" "}
+            <span className="mt-2 inline-block border-2 border-dashed border-[var(--sf-line-strong)] px-3 py-1.5 font-mono text-sm font-bold tracking-[0.2em] text-[var(--sf-paper)]">
+              {orderCode}
+            </span>
+            . Guárdalo por si necesitas volver a la pasarela.
+          </p>
+        ) : (
+          <p className="sf-muted mt-3 text-xs">
+            Referencia de pago: <span className="font-mono text-[var(--sf-paper)]">{orderCode}</span>.{" "}
+            {hasRedirect
+              ? "Una vez pagado, te redirigiremos para confirmar tu compra."
+              : "Una vez pagado, Wompi confirmará la operación; vuelve aquí para verificar tu compra."}
+          </p>
+        )}
+      </form>
+
+      {!hasRedirect && (
+        <div className="sf-muted mt-3 text-center text-xs">
+          <Link
+            href={`/checkout/payment-result?order=${orderCode}`}
+            className="font-semibold underline underline-offset-2"
+          >
+            Ver estado de mi compra
+          </Link>
+        </div>
+      )}
     </>
   );
 }

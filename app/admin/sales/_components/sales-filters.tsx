@@ -3,10 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { ORDER_STATUSES } from "@/lib/constants";
+import {
+  ORDER_FLAGS,
+  ORDER_FLAG_LABEL,
+  ORDER_STATUSES,
+  ORDER_STATUS_LABEL,
+} from "@/lib/constants";
 
 type ProductOption = { id: string; title: string };
-type Initial = { q?: string; status?: string; productId?: string; from?: string; to?: string };
+type Initial = { q?: string; status?: string; productId?: string; from?: string; to?: string; flag?: string };
+
+const EMPTY: Initial = { q: "", status: "", productId: "", from: "", to: "", flag: "" };
 
 export function SalesFilters({
   products,
@@ -16,13 +23,7 @@ export function SalesFilters({
   initial: Initial;
 }) {
   const router = useRouter();
-  const [f, setF] = useState<Initial>({
-    q: initial.q ?? "",
-    status: initial.status ?? "",
-    productId: initial.productId ?? "",
-    from: initial.from ?? "",
-    to: initial.to ?? "",
-  });
+  const [f, setF] = useState<Initial>({ ...EMPTY, ...initial });
 
   function apply() {
     const params = new URLSearchParams();
@@ -34,15 +35,19 @@ export function SalesFilters({
   }
 
   function clear() {
-    setF({ q: "", status: "", productId: "", from: "", to: "" });
+    setF(EMPTY);
     router.push("/admin/sales");
   }
 
+  const inputClass =
+    "mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
+  const labelClass = "block text-xs font-medium text-muted-foreground";
+
   return (
     <div className="mt-6 rounded-2xl border border-border bg-card p-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
-          <label htmlFor="sales-q" className="block text-xs font-medium text-muted-foreground">
+          <label htmlFor="sales-q" className={labelClass}>
             Buscar (orden, email, nombre)
           </label>
           <input
@@ -51,36 +56,54 @@ export function SalesFilters({
             value={f.q}
             onChange={(e) => setF({ ...f, q: e.target.value })}
             placeholder="FS-…, cliente@mail.com, Nombre"
-            className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            className={inputClass}
           />
         </div>
         <div>
-          <label htmlFor="sales-status" className="block text-xs font-medium text-muted-foreground">
+          <label htmlFor="sales-status" className={labelClass}>
             Estado
           </label>
           <select
             id="sales-status"
             value={f.status}
             onChange={(e) => setF({ ...f, status: e.target.value })}
-            className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            className={inputClass}
           >
             <option value="">Todos</option>
             {ORDER_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s === "pending" ? "Pendiente" : s === "approved" ? "Aprobada" : s === "declined" ? "Rechazada" : s === "voided" ? "Anulada" : "Error"}
+                {ORDER_STATUS_LABEL[s]}
               </option>
             ))}
           </select>
         </div>
         <div>
-          <label htmlFor="sales-product" className="block text-xs font-medium text-muted-foreground">
+          <label htmlFor="sales-flag" className={labelClass}>
+            Requieren atención
+          </label>
+          <select
+            id="sales-flag"
+            value={f.flag}
+            onChange={(e) => setF({ ...f, flag: e.target.value })}
+            className={inputClass}
+          >
+            <option value="">Todas</option>
+            {ORDER_FLAGS.map((flag) => (
+              <option key={flag} value={flag}>
+                {ORDER_FLAG_LABEL[flag]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="sales-product" className={labelClass}>
             Producto
           </label>
           <select
             id="sales-product"
             value={f.productId}
             onChange={(e) => setF({ ...f, productId: e.target.value })}
-            className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            className={inputClass}
           >
             <option value="">Todos</option>
             {products.map((p) => (
@@ -91,7 +114,7 @@ export function SalesFilters({
           </select>
         </div>
         <div>
-          <label htmlFor="sales-from" className="block text-xs font-medium text-muted-foreground">
+          <label htmlFor="sales-from" className={labelClass}>
             Desde
           </label>
           <input
@@ -99,11 +122,11 @@ export function SalesFilters({
             type="date"
             value={f.from}
             onChange={(e) => setF({ ...f, from: e.target.value })}
-            className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            className={inputClass}
           />
         </div>
         <div>
-          <label htmlFor="sales-to" className="block text-xs font-medium text-muted-foreground">
+          <label htmlFor="sales-to" className={labelClass}>
             Hasta
           </label>
           <input
@@ -111,7 +134,7 @@ export function SalesFilters({
             type="date"
             value={f.to}
             onChange={(e) => setF({ ...f, to: e.target.value })}
-            className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            className={inputClass}
           />
         </div>
       </div>

@@ -1,25 +1,10 @@
 import { listProductsForSales, listSales } from "@/lib/server/actions/crm";
 import { SalesFilters } from "./_components/sales-filters";
 import { Pagination } from "@/app/admin/_components/pagination";
+import { OrderStatusCell } from "@/app/admin/_components/order-status";
 import { formatDate, formatPrice } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
-
-const statusLabel: Record<string, string> = {
-  pending: "Pendiente",
-  approved: "Aprobada",
-  declined: "Rechazada",
-  voided: "Anulada",
-  error: "Error",
-};
-
-const statusColor: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
-  approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
-  declined: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
-  voided: "bg-muted text-muted-foreground",
-  error: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
-};
 
 function first(items: string | string[] | undefined): string | undefined {
   if (Array.isArray(items)) return items[0];
@@ -29,7 +14,7 @@ function first(items: string | string[] | undefined): string | undefined {
 export default async function AdminSalesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; productId?: string; from?: string; to?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; productId?: string; from?: string; to?: string; flag?: string; page?: string }>;
 }) {
   const sp = await searchParams;
   const filter = {
@@ -38,6 +23,7 @@ export default async function AdminSalesPage({
     productId: first(sp.productId),
     from: first(sp.from),
     to: first(sp.to),
+    flag: first(sp.flag),
   };
 
   const [salesData, products] = await Promise.all([
@@ -53,6 +39,7 @@ export default async function AdminSalesPage({
     if (filter.productId) params.set("productId", filter.productId);
     if (filter.from) params.set("from", filter.from);
     if (filter.to) params.set("to", filter.to);
+    if (filter.flag) params.set("flag", filter.flag);
     params.set("page", String(p));
     return `?${params.toString()}`;
   };
@@ -61,7 +48,8 @@ export default async function AdminSalesPage({
     <div>
       <h1 className="font-display text-3xl font-semibold">Ventas</h1>
       <p className="mt-2 text-muted-foreground">
-        Órdenes de la tienda con filtros por fecha, producto, estado y cliente.
+        Órdenes de la tienda con filtros por fecha, producto, estado, cliente y pagos que
+        requieren atención.
       </p>
 
       <SalesFilters products={products} initial={filter} />
@@ -108,9 +96,7 @@ export default async function AdminSalesPage({
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[s.status] ?? statusColor.pending}`}>
-                      {statusLabel[s.status] ?? s.status}
-                    </span>
+                    <OrderStatusCell status={s.status} flags={s.flags} />
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-foreground">
                     {formatPrice(s.total, s.currency)}

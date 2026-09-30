@@ -19,6 +19,8 @@ export type ServerEnv = {
   wompiIntegritySecret: string;
   wompiEventsSecret: string;
   wompiApiUrl: string;
+  reconcileSecret: string;
+  authTrustedOrigins: string[];
 };
 
 const required = (name: string): string => {
@@ -54,5 +56,17 @@ export const serverEnv: ServerEnv = {
   wompiIntegritySecret: optional("WOMPI_INTEGRITY_SECRET", ""),
   wompiEventsSecret: optional("WOMPI_EVENTS_SECRET", ""),
   wompiApiUrl: optional("WOMPI_API_URL", ""),
+  // Secreto que autoriza a `/api/cron/reconcile`. Vacío = reconciliación
+  // desactivada (el endpoint responde 503). Genera con: openssl rand -base64 32
+  reconcileSecret: optional("RECONCILE_SECRET", ""),
+  // Orígenes adicionales que better-auth acepta en cookies y CSRF, separados
+  // por coma. Hace falta cuando el origen real del navegador no es
+  // `NEXT_PUBLIC_APP_URL`: por ejemplo, tener a la vez un dominio de producción
+  // y `http://localhost:3000` para desarrollo, o un túnel de Cloudflare
+  // efímero. Sin esto, better-auth responde 403 "Invalid origin".
+  authTrustedOrigins: optional("AUTH_TRUSTED_ORIGINS", "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   isProd: process.env.NODE_ENV === "production",
 };

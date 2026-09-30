@@ -42,8 +42,59 @@ export function isLandingTheme(value: string | null | undefined): value is Landi
   return LANDING_THEMES.some((t) => t.value === value);
 }
 
-export const ORDER_STATUSES = ["pending", "approved", "declined", "voided", "error"] as const;
+// `expired` lo escribe `expireStalePendingOrders`. Antes faltaba aquí, y como
+// `parseStatus` (crm) valida contra esta lista, esas órdenes no se podían ni
+// filtrar ni etiquetar en el panel (salían como "expired" en inglés).
+export const ORDER_STATUSES = [
+  "pending",
+  "approved",
+  "declined",
+  "voided",
+  "error",
+  "expired",
+] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  pending: "Pendiente",
+  approved: "Aprobada",
+  declined: "Rechazada",
+  voided: "Anulada",
+  error: "Error",
+  expired: "Vencida",
+};
+
+export function isOrderStatus(value: string | undefined | null): value is OrderStatus {
+  return !!value && (ORDER_STATUSES as readonly string[]).includes(value);
+}
+
+/**
+ * Anomalías de una orden: requieren intervención humana, no son progreso
+ * normal. Las definiciones viven aquí (no en el módulo de servidor) para que las
+ * puedan consumir también los componentes cliente del panel.
+ *
+ *   - `undelivered`: pago aprobado sin acceso activo entregado.
+ *   - `amount_mismatch`: el cobro no cuadra con el importe de la orden, así que
+ *     no se aprobó. Dinero en disputa: nunca se repara solo.
+ */
+export const ORDER_FLAGS = ["undelivered", "amount_mismatch"] as const;
+export type OrderFlag = (typeof ORDER_FLAGS)[number];
+
+export const ORDER_FLAG_LABEL: Record<OrderFlag, string> = {
+  undelivered: "Sin entregar",
+  amount_mismatch: "Monto no coincide",
+};
+
+export const ORDER_FLAG_DESCRIPTION: Record<OrderFlag, string> = {
+  undelivered:
+    "Pago aprobado, pero el comprador aún no tiene acceso activo a algún producto de la orden. La reconciliación lo repara; si persiste, revisa los logs de entrega.",
+  amount_mismatch:
+    "Wompi reportó un pago cuyo monto o moneda no coinciden con la orden, así que no se aprobó. Requiere revisión manual.",
+};
+
+export function isOrderFlag(value: string | undefined | null): value is OrderFlag {
+  return !!value && (ORDER_FLAGS as readonly string[]).includes(value);
+}
 
 export const COUPON_TYPES = ["percentage", "fixed"] as const;
 export type CouponType = (typeof COUPON_TYPES)[number];

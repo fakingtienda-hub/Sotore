@@ -5,7 +5,15 @@ import { and, count, desc, eq, exists, gte, ilike, inArray, lte, or, sql } from 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/session";
-import { ORDER_STATUSES } from "@/lib/constants";
+import { isOrderFlag, isOrderStatus, type OrderFlag } from "@/lib/constants";
+import {
+  countOrderAnomalies,
+  getFlagsForOrders,
+  hasIgnoredReason,
+  hasUndeliveredProduct,
+  UNDELIVERED_SCAN_DAYS,
+  type AnomalyCounts,
+} from "@/lib/server/order-anomalies";
 
 export type SalesFilter = {
   q?: string;
@@ -13,6 +21,8 @@ export type SalesFilter = {
   productId?: string;
   from?: string;
   to?: string;
+  /** Aísla órdenes anómalas: `undelivered` | `amount_mismatch`. */
+  flag?: string;
 };
 
 export type Paginated<T> = {
@@ -29,11 +39,14 @@ export type DashboardStats = {
   pendingOrderCount: number;
   customerCount: number;
   downloadCount: number;
+  /** Órdenes que requieren intervención humana (ver `order-anomalies`). */
+  anomalies: AnomalyCounts;
   topProducts: { title: string; quantity: number; revenue: number; currency: string }[];
   recentOrders: {
     id: string;
     code: string;
     status: string;
+    flags: OrderFlag[];
     total: number;
     currency: string;
     createdAt: Date;
@@ -100,11 +113,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .orderBy(sql`SUM(${schema.orderItems.quantity}) DESC`)
     .limit(6);
 
-  const recentOrders = await db
+  const recentOrdersRaw = await db
     .select({
       id: schema.orders.id,
       code: schema.orders.code,
       status: schema.orders.status,
+      userId: schema.orders.userId,
+      gatewayPayload: schema.orders.gatewayPayload,
       total: schema.orders.total,
       currency: schema.orders.currency,
       createdAt: schema.orders.createdAt,
@@ -116,6 +131,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .orderBy(desc(schema.orders.createdAt))
     .limit(8);
 
+  const recentFlags = await getFlagsForOrders(recentOrdersRaw);
+  const anomalies = await countOrderAnomalies();
+
   return {
     revenueByCurrency: revenueByCurrency.map((r) => ({
       currency: r.currency,
@@ -125,16 +143,18 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     pendingOrderCount: pendingCount?.c ?? 0,
     customerCount: customerCount?.c ?? 0,
     downloadCount: downloadCount?.c ?? 0,
+    anomalies,
     topProducts: topProducts.map((p) => ({
       title: p.title,
       quantity: p.quantity,
       revenue: p.revenue,
       currency: p.currency,
     })),
-    recentOrders: recentOrders.map((o) => ({
+    recentOrders: recentOrdersRaw.map((o) => ({
       id: o.id,
       code: o.code,
       status: o.status,
+      flags: recentFlags.get(o.id) ?? [],
       total: o.total,
       currency: o.currency,
       createdAt: o.createdAt,
@@ -297,6 +317,7 @@ export type SalesRow = {
   id: string;
   code: string;
   status: string;
+  flags: OrderFlag[];
   total: number;
   currency: string;
   createdAt: Date;
@@ -306,7 +327,7 @@ export type SalesRow = {
 };
 
 function parseStatus(status: string | undefined): string | undefined {
-  return status && (ORDER_STATUSES as readonly string[]).includes(status) ? status : undefined;
+  return isOrderStatus(status) ? status : undefined;
 }
 
 function productExists(productId: string) {
@@ -337,6 +358,23 @@ export async function listSales(filter: SalesFilter = {}, page = 1, pageSize = 5
   if (filter.to) conditions.push(lte(schema.orders.createdAt, new Date(`${filter.to}T23:59:59`)));
   if (filter.productId) conditions.push(productExists(filter.productId));
 
+  // Aislamiento de anomalías. `undelivered` solo puede darse en órdenes
+  // `approved` (el pago entró) y dentro de la ventana de escaneo, para que no
+  // aparezcan ancientas que la reconciliación ya no mira.
+  const flag = isOrderFlag(filter.flag) ? filter.flag : undefined;
+  if (flag === "undelivered") {
+    conditions.push(
+      eq(schema.orders.status, "approved"),
+      gte(
+        schema.orders.paidAt,
+        new Date(Date.now() - UNDELIVERED_SCAN_DAYS * 24 * 60 * 60 * 1000),
+      ),
+      hasUndeliveredProduct(),
+    );
+  } else if (flag === "amount_mismatch") {
+    conditions.push(hasIgnoredReason());
+  }
+
   const where = conditions.length ? and(...conditions) : undefined;
 
   // El where puede referenciar emails/nombres de users (búsqueda por texto),
@@ -354,6 +392,8 @@ export async function listSales(filter: SalesFilter = {}, page = 1, pageSize = 5
       id: schema.orders.id,
       code: schema.orders.code,
       status: schema.orders.status,
+      userId: schema.orders.userId,
+      gatewayPayload: schema.orders.gatewayPayload,
       total: schema.orders.total,
       currency: schema.orders.currency,
       createdAt: schema.orders.createdAt,
@@ -368,12 +408,21 @@ export async function listSales(filter: SalesFilter = {}, page = 1, pageSize = 5
     .offset((safePage - 1) * pageSize);
 
   const orderIds = orders.map((o) => o.id);
-  const items = orderIds.length
-    ? await db.select().from(schema.orderItems).where(inArray(schema.orderItems.orderId, orderIds))
-    : [];
+  const [items, flags] = await Promise.all([
+    orderIds.length
+      ? db.select().from(schema.orderItems).where(inArray(schema.orderItems.orderId, orderIds))
+      : Promise.resolve([]),
+    getFlagsForOrders(orders),
+  ]);
 
   const rows = orders.map((o) => ({
-    ...o,
+    id: o.id,
+    code: o.code,
+    status: o.status,
+    flags: flags.get(o.id) ?? [],
+    total: o.total,
+    currency: o.currency,
+    createdAt: o.createdAt,
     customerName: o.customerName,
     customerEmail: o.customerEmail,
     items: items

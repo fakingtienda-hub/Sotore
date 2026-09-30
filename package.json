@@ -20,7 +20,8 @@
     "verify:ownership": "tsx scripts/verify-order-ownership.ts",
     "verify:order-expiry": "tsx scripts/verify-order-expiry.ts",
     "verify:media-policy": "tsx scripts/verify-media-policy.ts",
-    "verify:crm-currency": "tsx scripts/verify-crm-currency.ts"
+    "verify:crm-currency": "tsx scripts/verify-crm-currency.ts",
+    "verify:order-anomalies": "tsx --conditions=react-server scripts/verify-order-anomalies.ts"
   },
   "dependencies": {
     "@fastify/busboy": "^3.2.2",

@@ -13,13 +13,31 @@ import * as schema from "@/lib/db/schema";
  * faltantes (o reactiva las revocadas). Lo usan la aprobación vía webhook,
  * sus reintentos y la simulación demo, de modo que la entrega siempre corre
  * por el mismo camino.
+ *
+ * Envuelve `grantOrderEntitlements` (que es la parte de base de datos) para
+ * invalidar la caché de la biblioteca sólo cuando algo cambió de verdad.
  */
-export async function ensureOrderEntitlements(orderId: string): Promise<{
+export async function ensureOrderEntitlements(orderId: string): Promise<GrantResult> {
+  const result = await grantOrderEntitlements(orderId);
+  if (result.ok) {
+    revalidatePath("/library");
+  }
+  return result;
+}
+
+export type GrantResult = {
   ok: boolean;
   granted: number;
   existing: number;
   reason?: string;
-}> {
+};
+
+/**
+ * Aplica los accesos de una orden aprobada, sin efectos secundarios de Next.
+ * Separado de `ensureOrderEntitlements` para poder ejercitarlo fuera de una
+ * petición (los scripts de verificación no tienen contexto de `revalidatePath`).
+ */
+export async function grantOrderEntitlements(orderId: string): Promise<GrantResult> {
   const [order] = await db
     .select()
     .from(schema.orders)
@@ -67,12 +85,21 @@ export async function ensureOrderEntitlements(orderId: string): Promise<{
       })
       .onConflictDoUpdate({
         target: [schema.purchases.userId, schema.purchases.productId],
-        set: { status: "active", revokedAt: null, grantedAt: new Date() },
+        // `orderId` SÍ se actualiza: es la atribución que usa
+        // `revokeOrderEntitlements` para revocar por orden. Si una compra
+        // revocada se reactiva desde otra orden y aquí se dejara el `orderId`
+        // viejo, un reembolso de la orden nueva no revocaría nada y el
+        // cliente conservaría el acceso pagado dos veces.
+        set: {
+          orderId: order.id,
+          status: "active",
+          revokedAt: null,
+          grantedAt: new Date(),
+        },
       });
     granted += 1;
   }
 
-  revalidatePath("/library");
   return { ok: true, granted, existing };
 }
 

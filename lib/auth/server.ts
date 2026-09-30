@@ -23,7 +23,11 @@ export const auth = betterAuth({
       verifications: schema.verifications,
     },
   }),
-  trustedOrigins: [serverEnv.appUrl],
+  // `appUrl` siempre entra; `AUTH_TRUSTED_ORIGINS` suma los orígenes extra
+  // (localhost en desarrollo, un túnel de Cloudflare, un previews de Vercel).
+  // better-auth compara contra el header `Origin` real del navegador, así que
+  // basta con que el origen desde el que se entra esté en esta lista.
+  trustedOrigins: [serverEnv.appUrl, ...serverEnv.authTrustedOrigins],
   advanced: {
     cookiePrefix: "fakingstore",
     defaultCookieAttributes: {

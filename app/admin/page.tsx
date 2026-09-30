@@ -2,24 +2,9 @@ import Link from "next/link";
 
 import { getDashboardStats } from "@/lib/server/actions/crm";
 import { formatDate, formatPrice } from "@/lib/utils/format";
+import { OrderStatusCell } from "./_components/order-status";
 
 export const dynamic = "force-dynamic";
-
-const statusLabel: Record<string, string> = {
-  pending: "Pendiente",
-  approved: "Aprobada",
-  declined: "Rechazada",
-  voided: "Anulada",
-  error: "Error",
-};
-
-const statusColor: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
-  approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
-  declined: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
-  voided: "bg-muted text-muted-foreground",
-  error: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
-};
 
 export default async function AdminDashboardPage() {
   const stats = await getDashboardStats();
@@ -40,12 +25,61 @@ export default async function AdminDashboardPage() {
     { label: "Descargas", value: String(stats.downloadCount), sub: "Archivos descargados" },
   ];
 
+  // Sólo aparece si hay algo que mirar. Una caja permanente acabaría enseñando
+  // a ignorar la alerta, que es justo lo que no puede pasar con dinero cobrado
+  // y producto sin entregar.
+  const { undelivered, amount_mismatch: amountMismatch } = stats.anomalies;
+  const hasAnomalies = undelivered > 0 || amountMismatch > 0;
+
   return (
     <div>
       <h1 className="font-display text-3xl font-semibold">Dashboard</h1>
       <p className="mt-2 text-muted-foreground">
         Resumen de ventas, clientes y descargas de la tienda.
       </p>
+
+      {hasAnomalies ? (
+        <div
+          role="alert"
+          className="mt-6 rounded-2xl border-2 border-red-300 bg-red-50 p-5 dark:border-red-900 dark:bg-red-950/40"
+        >
+          <p className="font-display text-base font-semibold text-red-900 dark:text-red-100">
+            Hay pagos que necesitan atención
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-red-800 dark:text-red-200">
+            {undelivered > 0 ? (
+              <li>
+                <strong>{undelivered}</strong> pago(s) aprobado(s) sin acceso entregado. La
+                reconciliación lo repara sola; si persiste, revisa los logs de entrega.
+              </li>
+            ) : null}
+            {amountMismatch > 0 ? (
+              <li>
+                <strong>{amountMismatch}</strong> pago(s) con monto o moneda que no coinciden con
+                la orden. <strong>No se reparan solos</strong>: hay que revisarlos a mano.
+              </li>
+            ) : null}
+          </ul>
+          <div className="mt-4 flex flex-wrap gap-4 text-sm">
+            {undelivered > 0 ? (
+              <Link
+                href="/admin/sales?flag=undelivered"
+                className="font-medium underline underline-offset-2"
+              >
+                Ver sin entregar →
+              </Link>
+            ) : null}
+            {amountMismatch > 0 ? (
+              <Link
+                href="/admin/sales?flag=amount_mismatch"
+                className="font-medium underline underline-offset-2"
+              >
+                Ver montos discrepantes →
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
@@ -103,9 +137,7 @@ export default async function AdminDashboardPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
-                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[o.status] ?? statusColor.pending}`}>
-                      {statusLabel[o.status] ?? o.status}
-                    </span>
+                    <OrderStatusCell status={o.status} flags={o.flags} />
                     <span className="text-sm font-medium text-foreground">{formatPrice(o.total, o.currency)}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(o.createdAt)}</span>
                   </div>
