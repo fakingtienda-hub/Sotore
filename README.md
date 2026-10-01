@@ -61,7 +61,7 @@ Ver [.env.example](./.env.example) para la lista completa documentada.
 | 12 | Emails transaccionales (console ✓; Resend/SMTP en producción pendiente) |
 | 13 | Analytics + Meta Pixel |
 | **14 ✓** | Seguridad + pruebas (auditoría de arquitectura completa) |
-| 15 | Optimización + deploy (deploy en producción ✓; falta storage durable, ver abajo) |
+| **15 ✓** | Optimización + deploy (deploy en producción y storage durable en R2 ✓) |
 
 ## Estado actual
 
@@ -69,39 +69,23 @@ Producción: **https://sotore-psi.vercel.app** (Vercel, deploy automático desde
 
 - Base de datos en Supabase: 10 migraciones aplicadas, 17 tablas.
 - Landing con **tema `premium` por defecto** (`DEFAULT_LANDING_THEME` en `lib/constants.ts`; el resto del código la referencia, no la vuelve a hardcodear).
-- Los archivos se guardan y se sirven, pero **no se pueden subir desde la nube**: falta el bucket. Abajo está el paso exacto.
+- **Subida de archivos funcionando en producción.** Bucket R2 `productos-tienda` conectado y verificado con un navegador real.
 
-### ⬜ Pendiente: configurar el bucket de R2 (bloquea la subida de portadas)
+### ✅ R2 conectado: cómo quedó y qué se aprende si hay que rehacerlo
 
-Es lo único que falta para poder subir una imagen de portada o un archivo de producto desde la UI. En producción la ruta proxied responde `500` con `"Error al escribir el archivo."`: el filesystem de Vercel es de solo lectura salvo `/tmp`, así que el driver de disco no puede escribir nada.
+Bucket **`productos-tienda`**, con las cuatro variables en Vercel (production y preview): `STORAGE_BUCKET`, `STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`. CORS aplicado en el bucket.
 
-Bucket: **`productos-tienda`**. `STORAGE_BUCKET` y `STORAGE_ENDPOINT` ya están cargados en Vercel (production y preview). **Faltan las dos claves.**
+El token es un **R2 Account API Token** con `Object Read & Write` limitado a ese bucket. Preferí *Account* sobre *User*: el de usuario queda inactivo si te sacan el rol de la cuenta y la tienda se deja de poder subir archivos sin causa aparente.
 
-1. En Cloudflare: **R2 → Overview → Manage R2 API Tokens → Create Account API Token**.
-2. Permiso **Object Read & Write**, con alcance **Apply to specific buckets only** → `productos-tienda`. Preferí *Account API Token* sobre *User*: el de usuario queda inactivo si te sacan el rol de la cuenta y la tienda se queda sin poder subir archivos sin causa aparente.
-3. **Create API Token** muestra **Access Key ID** y **Secret Access Key** una sola vez. Guardalos antes de cerrar la pestaña.
-4. En Vercel (Settings → Environment Variables), agregar las dos que faltan:
+Verificado end-to-end contra producción: login en la UI → `POST /api/files/upload-url` devuelve la URL firmada → `PUT` directo a R2 → `200` → relectura por `/api/files/<storageKey>` → `200 image/png`. Sin errores de CORS en consola.
 
-   | Variable | Origen |
-   |----------|--------|
-   | `STORAGE_ACCESS_KEY_ID` | *Access Key ID* del token |
-   | `STORAGE_SECRET_ACCESS_KEY` | *Secret Access Key* del token |
+Tres cosas que hubo que resolver y que no son evidentes:
 
-5. En el bucket, **Settings → CORS**. **No es opcional**: el cliente siempre pide primero una URL presignada y sube directo desde el navegador, así que sin CORS falla cualquier imagen, por chica que sea.
+1. **La CSP bloqueaba la subida, no el CORS.** `connect-src 'self'` hacía que el navegador rechazara el `PUT` con `Refused to connect`, *antes* de cualquier petición. R2, el CORS y la firma ya estaban bien y el error se veía igual.
+2. **Un source de host en CSP no incluye subdominios.** El cliente S3 direcciona en virtual-hosted style, así que la petición real va a `https://<bucket>.<endpoint>`, no a `https://<endpoint>`. Alcanzaba con agregar solo el origen del endpoint; hacía falta además la forma con comodín. `next.config.ts` deriva ambas de `STORAGE_ENDPOINT`.
+3. **Las variables nuevas no aplican al deployment vivo.** Hay que redeployar después de cargarlas.
 
-   ```json
-   [{ "AllowedOrigins": ["https://sotore-psi.vercel.app"],
-      "AllowedMethods": ["PUT", "GET", "HEAD"],
-      "AllowedHeaders": ["*"],
-      "ExposeHeaders": ["ETag"],
-      "MaxAgeSeconds": 3600 }]
-   ```
-
-6. Redeploy (Vercel no aplica variables nuevas al deployment vivo) y probar la subida.
-
-Comprobaciones esperadas: `POST /api/files/upload-url` devuelve una URL firmada en vez de `501`, y `POST /api/files/upload` deja de dar `500`.
-
-> Las credenciales van directo en el dashboard de Vercel; no pegarlas en el chat ni en `.env.local`, que está versionado.
+> Las credenciales van directo en el dashboard de Vercel. No pegarlas en el chat ni en archivos del repo, y rotar las que ya quedaron expuestas en conversaciones.
 
 
 ## Puesta en producción
