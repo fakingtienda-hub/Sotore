@@ -135,7 +135,7 @@ export async function GET(
 
     let stream;
     try {
-      stream = storage.stream(file.storageKey, { start, end });
+      stream = await storage.stream(file.storageKey, { start, end });
       // Si el archivo desaparece a mitad de lectura, abortamos el stream en
       // silencio (evita un uncaughtException; el cliente ya recibe cortado).
       (stream as NodeJS.ReadableStream).on("error", () => {});
@@ -160,7 +160,7 @@ export async function GET(
 
   let fullStream;
   try {
-    fullStream = storage.stream(file.storageKey);
+    fullStream = await storage.stream(file.storageKey);
     (fullStream as NodeJS.ReadableStream).on("error", () => {});
   } catch (cause) {
     if (cause instanceof StorageError && cause.code === "NOT_FOUND") {

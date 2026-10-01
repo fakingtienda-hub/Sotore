@@ -53,7 +53,7 @@ export async function GET(
 
   let stream;
   try {
-    stream = storage.stream(storageKey);
+    stream = await storage.stream(storageKey);
     (stream as NodeJS.ReadableStream).on("error", () => {});
   } catch (cause) {
     if (cause instanceof StorageError && cause.code === "NOT_FOUND") {

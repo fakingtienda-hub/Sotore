@@ -5,79 +5,40 @@ import { randomUUID } from "node:crypto";
 import { Transform } from "node:stream";
 
 import { serverEnv } from "@/lib/serverEnv";
+import {
+  mimeFor,
+  normalizeObjectKey,
+  StorageError,
+  type GetResult,
+  type PutResult,
+  type StorageDriver,
+  type StorageRange,
+} from "@/lib/server/storage-driver";
+import { createR2Storage } from "@/lib/server/storage-r2";
 
 const LOCAL_ROOT = path.isAbsolute(serverEnv.storageDir)
   ? serverEnv.storageDir
   : path.join(process.cwd(), serverEnv.storageDir);
 
-const MIME_BY_EXT: Record<string, string> = {
-  pdf: "application/pdf",
-  zip: "application/zip",
-  rar: "application/vnd.rar",
-  "7z": "application/x-7z-compressed",
-  mp4: "video/mp4",
-  webm: "video/webm",
-  mov: "video/quicktime",
-  avi: "video/x-msvideo",
-  mp3: "audio/mpeg",
-  wav: "audio/wav",
-  ogg: "audio/ogg",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-  svg: "image/svg+xml",
-  txt: "text/plain",
-  md: "text/markdown",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  xls: "application/vnd.ms-excel",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-};
-
-export class StorageError extends Error {
-  constructor(
-    message: string,
-    readonly code:
-      | "NOT_FOUND"
-      | "FORBIDDEN"
-      | "IO_ERROR"
-      | "LIMIT" = "IO_ERROR",
-  ) {
-    super(message);
-    this.name = "StorageError";
-  }
-}
-
-export class LocalStorage {
+export class LocalStorage implements StorageDriver {
+  readonly kind = "local" as const;
   private root = LOCAL_ROOT;
 
   /** Normaliza la storageKey y devuelve la ruta absoluta bajo el root.
    *  Rechaza travesía de directorios (..), rutas absolutas y bytes nulos. */
   private resolveKey(storageKey: string): string {
-    if (typeof storageKey !== "string" || storageKey.length === 0 || storageKey.length > 512) {
-      throw new StorageError("storageKey inválida.", "FORBIDDEN");
-    }
-    if (storageKey.includes("\0")) {
-      throw new StorageError("storageKey inválida.", "FORBIDDEN");
-    }
-    // Separo en segmentos y descarto los vacíos/`.` para normalizar de forma segura.
-    const segments = storageKey.split("/").filter((s) => s.length > 0 && s !== ".");
-    if (segments.length === 0 || segments.some((s) => s === "..")) {
-      throw new StorageError("storageKey inválida.", "FORBIDDEN");
-    }
-    return path.join(this.root, ...segments);
+    const key = normalizeObjectKey(storageKey);
+    return path.join(this.root, ...key.split("/"));
   }
 
-  async put(storageKey: string, data: Uint8Array): Promise<{ storageKey: string; sizeBytes: number }> {
+  async put(storageKey: string, data: Uint8Array): Promise<PutResult> {
     const absolute = this.resolveKey(storageKey);
     await mkdir(path.dirname(absolute), { recursive: true });
     await writeFile(absolute, data);
     return { storageKey, sizeBytes: data.byteLength };
   }
 
-  async get(storageKey: string): Promise<{ data: Buffer; mimeType: string | null; sizeBytes: number }> {
+  async get(storageKey: string): Promise<GetResult> {
     const absolute = this.resolveKey(storageKey);
     let handle;
     try {
@@ -121,8 +82,9 @@ export class LocalStorage {
   }
 
   /** Backpressure-friendly stream para servir el archivo en route handlers.
-   *  Con `range` solo lee el rango pedido (soporte de Range/206 para video, etc.). */
-  stream(storageKey: string, range?: { start?: number; end?: number }): NodeJS.ReadableStream {
+   *  Con `range` solo lee el rango pedido (soporte de Range/206 para video, etc.).
+   *  Asíncrono por contrato común con el driver remoto, aunque aquí no await. */
+  async stream(storageKey: string, range?: StorageRange): Promise<NodeJS.ReadableStream> {
     const absolute = this.resolveKey(storageKey);
     const opts: { start?: number; end?: number } = {};
     if (range?.start != null) opts.start = range.start;
@@ -139,7 +101,7 @@ export class LocalStorage {
     storageKey: string,
     source: NodeJS.ReadableStream,
     opts?: { maxBytes?: number },
-  ): Promise<{ storageKey: string; sizeBytes: number }> {
+  ): Promise<PutResult> {
     const absolute = this.resolveKey(storageKey);
     await mkdir(path.dirname(absolute), { recursive: true });
     const tmpPath = `${absolute}.${randomUUID()}.tmp`;
@@ -197,11 +159,23 @@ export class LocalStorage {
       if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
     }
   }
+
+  /** El driver local no sirve URLs firmadas: el bucket no existe. Los route
+   *  handlers interpretan `null` y hacen streaming a través de la función. */
+  async signedUrl(): Promise<string | null> {
+    return null;
+  }
 }
 
-export function mimeFor(storageKey: string): string | null {
-  const ext = storageKey.toLowerCase().split(".").pop();
-  return ext ? (MIME_BY_EXT[ext] ?? null) : null;
+/* Driver activo. Con STORAGE_ENDPOINT + credenciales en el entorno usa R2; si
+ * no, cae al filesystem local para que el desarrollo siga funcionando. */
+function selectStorage(): StorageDriver {
+  const r2 = createR2Storage();
+  if (r2) return r2;
+  return new LocalStorage();
 }
 
-export const storage = new LocalStorage();
+export const storage: StorageDriver = selectStorage();
+
+export { StorageError, mimeFor };
+export type { StorageDriver, GetResult, PutResult, StorageRange };

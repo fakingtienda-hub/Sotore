@@ -14,6 +14,11 @@ export type ServerEnv = {
   storageDir: string;
   storageBaseUrl: string;
   maxUploadBytes: number;
+  storageBucket: string;
+  storageEndpoint: string;
+  storageAccessKeyId: string;
+  storageSecretAccessKey: string;
+  signedUrlTtlSeconds: number;
   wompiEnv: "sandbox" | "production";
   wompiPublicKey: string;
   wompiIntegritySecret: string;
@@ -51,6 +56,16 @@ export const serverEnv: ServerEnv = {
   storageDir: optional("STORAGE_DIR", "storage"),
   storageBaseUrl: optional("STORAGE_BASE_URL", "/api/files"),
   maxUploadBytes: Number(optional("STORAGE_MAX_FILE_BYTES", String(512 * 1024 * 1024))),
+  storageBucket: optional("STORAGE_BUCKET", "product-files"),
+  // Credenciales S3-compatible (Cloudflare R2). Si falta STORAGE_ENDPOINT o
+  // alguna clave, `lib/server/storage.ts` cae al driver local en disco.
+  storageEndpoint: optional("STORAGE_ENDPOINT", ""),
+  storageAccessKeyId: optional("STORAGE_ACCESS_KEY_ID", ""),
+  storageSecretAccessKey: optional("STORAGE_SECRET_ACCESS_KEY", ""),
+  // Vigencia de las URLs firmadas de descarga. Corta a propósito: la URL da
+  // acceso al objeto sin pasar por la función de Vercel, así que no debe
+  // quedar en un historialShared ni en un log como una credencial eternal.
+  signedUrlTtlSeconds: Number(optional("SIGNED_URL_TTL_SECONDS", "900")),
   wompiEnv: wompiEnvRaw as ServerEnv["wompiEnv"],
   wompiPublicKey: optional("NEXT_PUBLIC_WOMPI_PUBLIC_KEY", ""),
   wompiIntegritySecret: optional("WOMPI_INTEGRITY_SECRET", ""),

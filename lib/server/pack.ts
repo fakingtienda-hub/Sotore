@@ -83,7 +83,7 @@ export async function buildProductPackZip(
   for (const f of sorted) {
     const folder = f.groupId ? (groupNames.get(f.groupId) ?? null) : null;
     const entryName = folder ? `${safeEntryName(folder)}/${safeEntryName(f.name)}` : safeEntryName(f.name);
-    archive.append(storage.stream(f.storageKey) as unknown as Readable, {
+    archive.append((await storage.stream(f.storageKey)) as unknown as Readable, {
       name: entryName,
       store: shouldStoreRaw(f),
     });
@@ -133,8 +133,14 @@ export function getOrBuildProductPackZip(
 
 /** Invalida el ZIP cacheado: elimina el archivo y deja `zipKey` en null para
  *  que las próximas peticiones del pack lo regeneren bajo demanda. Se llama
- *  cada vez que cambian los archivos/carpetas del producto. */
+ *  cada vez que cambian los archivos/carpetas del producto.
+ *
+ *  Con un driver remoto (R2) esto NO se hace. Ahí el pack se sube a mano al
+ *  bucket y la app no es su dueña: borrar el objeto por un cambio de portada o
+ *  de grupo dejaría al cliente sin descarga y obligaría a volver a subir cientos
+ *  de MB. El `zipKey` se respeta y quien lo gestiona es el bucket. */
 export async function invalidateProductPackZip(productId: string): Promise<void> {
+  if (storage.kind === "r2") return;
   try {
     const [row] = await db
       .select({ zipKey: schema.products.zipKey })

@@ -1,4 +1,4 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, count, eq, isNotNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { sql } from "drizzle-orm";
 
@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { FilesList, type LibraryFileGroup, type LibraryFileRow } from "./_components/files-list";
+import { PackDownload } from "./_components/pack-download";
 import "./_components/library-gallery.css";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,34 @@ export default async function LibraryProductPage({
     .limit(1);
 
   if (!purchase) notFound();
+
+  // El cliente final solo ve portada + botón de descarga, así que no consultamos
+  // el detalle de archivos: son cientos de filas y una petición por archivo para
+  // miniaturas que ya no mostramos. El admin sí lo necesita para revisar el pack.
+  if (user.role !== "admin") {
+    const [agg] = await db
+      .select({ n: count() })
+      .from(schema.productFiles)
+      .where(
+        and(
+          eq(schema.productFiles.productId, product.id),
+          eq(schema.productFiles.isActive, true),
+          isNotNull(schema.productFiles.groupId),
+        ),
+      );
+
+    return (
+      <PackDownload
+        product={{
+          id: product.id,
+          title: product.title,
+          coverImageUrl: product.coverImageUrl ?? null,
+          zipSizeBytes: product.zipSizeBytes,
+        }}
+        fileCount={agg?.n ?? 0}
+      />
+    );
+  }
 
   const [fileRows, groups, downloadRows] = await Promise.all([
     db

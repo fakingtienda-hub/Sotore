@@ -8,6 +8,7 @@ import { getSession } from "@/lib/auth/session";
 import { storage, StorageError } from "@/lib/server/storage";
 import { getOrBuildProductPackZip } from "@/lib/server/pack";
 import { rateLimit } from "@/lib/server/rate-limit";
+import { serverEnv } from "@/lib/serverEnv";
 
 export const dynamic = "force-dynamic";
 
@@ -92,17 +93,44 @@ export async function GET(
     }
   }
 
-  // --- 4) Generar el pack al vuelo si aún no existe (single-flight) --------
+  // --- 4) Localizar el pack ------------------------------------------------
+  const conventionalKey = `products/${productId}/pack.zip`;
+
+  if (!product.zipKey && storage.kind === "r2") {
+    // Con R2 el pack se sube a mano al bucket. Si el producto todavía no tiene
+    // `zipKey` guardado, se adopta la clave convencional si el objeto existe, y
+    // se persiste: no hace falta tocar la base de datos a mano por cada producto.
+    const exists = await storage.exists(conventionalKey).catch(() => false);
+    if (exists) {
+      product.zipKey = conventionalKey;
+      const { sizeBytes } = await storage.stat(conventionalKey);
+      product.zipSizeBytes = sizeBytes;
+      await db
+        .update(schema.products)
+        .set({ zipKey: conventionalKey, zipSizeBytes: sizeBytes, zipGeneratedAt: new Date() })
+        .where(eq(schema.products.id, productId));
+    }
+  }
+
   if (!product.zipKey) {
+    // Sin driver remoto se puede generar al vuelo (single-flight).
+    if (storage.kind === "r2") {
+      return Response.json(
+        { error: "Este producto todavía no tiene un pack en el bucket." },
+        { status: 404 },
+      );
+    }
     const result = await getOrBuildProductPackZip(productId);
     if (!result.ok) {
       return Response.json({ error: result.error ?? "No hay archivos para comprimir." }, { status: 404 });
     }
-    product.zipKey = `products/${productId}/pack.zip`;
+    product.zipKey = conventionalKey;
     product.zipSizeBytes = result.sizeBytes ?? 0;
   }
 
-  // --- 4) Servir el ZIP ----------------------------------------------------
+  const safeSlug = product.slug.replace(/[^a-z0-9-]/gi, "") || product.id;
+
+  // --- 5) Servir el ZIP ----------------------------------------------------
   let total = product.zipSizeBytes ?? null;
   try {
     if (total == null) {
@@ -112,9 +140,30 @@ export async function GET(
     return Response.json({ error: "El pack no se encontró en almacenamiento." }, { status: 404 });
   }
 
+  // Con un driver remoto (R2) redirigimos a una URL firmada en vez de hacer
+  // proxy de los bytes: los packs llegan a cientos de MB y pasarían enteros
+  // por la función de Vercel. La autorización ya se validó arriba; la URL solo
+  // existe unos minutos y R2 no cobra por salida a internet.
+  if (storage.kind === "r2") {
+    try {
+      const signed = await storage.signedUrl(product.zipKey, {
+        expiresInSeconds: serverEnv.signedUrlTtlSeconds,
+        downloadName: `${safeSlug}.zip`,
+      });
+      if (signed) {
+        return Response.redirect(signed, 302);
+      }
+    } catch (cause) {
+      if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
+        return Response.json({ error: "El pack no se encontró en almacenamiento." }, { status: 404 });
+      }
+      return Response.json({ error: "Error al preparar la descarga." }, { status: 500 });
+    }
+  }
+
   let stream;
   try {
-    stream = storage.stream(product.zipKey);
+    stream = await storage.stream(product.zipKey);
     (stream as NodeJS.ReadableStream).on("error", () => {});
   } catch (cause) {
     if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
@@ -122,8 +171,6 @@ export async function GET(
     }
     return Response.json({ error: "Error al servir el pack." }, { status: 500 });
   }
-
-  const safeSlug = product.slug.replace(/[^a-z0-9-]/gi, "") || product.id;
 
   return new Response(
     Readable.toWeb(stream as unknown as Readable) as unknown as ReadableStream,
