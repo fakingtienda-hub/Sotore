@@ -58,6 +58,16 @@ export interface StorageDriver {
     storageKey: string,
     opts?: { expiresInSeconds?: number; downloadName?: string },
   ): Promise<string | null>;
+
+  /** URL firmada de subida directa: el navegador hace el PUT contra el bucket
+   *  y los bytes nunca pasan por la función. Es la única vía posible para
+   *  archivos grandes, porque Vercel corta el body de una request en ~4,5 MB.
+   *  `null` cuando el driver no puede presignar (local): el cliente debe caer
+   *  entonces a la subida proxied por la app. */
+  presignPut(
+    storageKey: string,
+    opts?: { expiresInSeconds?: number; contentType?: string; contentLength?: number },
+  ): Promise<string | null>;
 }
 
 /** Normaliza una storageKey para uso remoto: rechaza travesía de directorios,

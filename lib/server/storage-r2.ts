@@ -251,6 +251,29 @@ export class R2Storage implements StorageDriver {
     }
   }
 
+  /** Firma un PUT para que el navegador suba directo al bucket. `contentLength`
+   *  va en la firma para que R2 rechace de entrada un archivo más grande del
+   *  declarado, en vez de dejar que se suba entero y se detecte tarde. */
+  async presignPut(
+    storageKey: string,
+    opts?: { expiresInSeconds?: number; contentType?: string; contentLength?: number },
+  ): Promise<string | null> {
+    const key = normalizeObjectKey(storageKey);
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ContentType: opts?.contentType,
+      ContentLength: opts?.contentLength,
+    });
+    try {
+      return await getSignedUrl(this.client, command, {
+        expiresIn: opts?.expiresInSeconds ?? 900,
+      });
+    } catch (cause) {
+      throw this.mapError(cause, key);
+    }
+  }
+
   private mapError(cause: unknown, key: string): StorageError {
     if (cause instanceof StorageError) return cause;
     if (isNotFound(cause)) {

@@ -101,6 +101,15 @@ export async function POST(req: NextRequest) {
               message: `El archivo supera el límite de ${Math.round(serverEnv.maxUploadBytes / 1024 / 1024)} MB.`,
             });
           } else {
+            // El cliente recibe un mensaje genérico a propósito, pero la causa
+            // va al log: sin esto, un fallo de storage en Vercel (por ejemplo
+            // un filesystem de solo lectura) es imposible de diagnosticar desde
+            // el panel, porque la respuesta no dice nada.
+            console.error("[files/upload] no se pudo escribir", {
+              storageKey,
+              cause: cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause),
+              stack: cause instanceof Error ? cause.stack : undefined,
+            });
             resolveOutcome({ kind: "error", status: 500, message: "Error al escribir el archivo." });
           }
         });

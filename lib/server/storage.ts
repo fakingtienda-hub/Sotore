@@ -171,6 +171,12 @@ export class LocalStorage implements StorageDriver {
   async signedUrl(): Promise<string | null> {
     return null;
   }
+
+  /** En local no hay a quién presignarle un PUT, así que el cliente cae a la
+   *  subida proxied por la app, que sí funciona mientras el fs sea escribible. */
+  async presignPut(): Promise<string | null> {
+    return null;
+  }
 }
 
 /* Driver activo. Con STORAGE_ENDPOINT + credenciales en el entorno usa R2; si
@@ -189,10 +195,21 @@ function storageDriver(): StorageDriver {
 }
 
 /** El driver se elige en el primer uso. `next build` importa esta módulo para
- *  recoger page data; elegirlo aquí exigiría el entorno de storage en build. */
+ *  recoger page data; elegirlo aquí exigiría el entorno de storage en build.
+ *
+ *  Ojo con el `receiver` del trap: hay que leer contra el driver real y no
+ *  reenviar el proxy. Con el proxy como `receiver`, dentro de los métodos `this`
+ *  pasa a ser el proxy, y las escrituras de campo —el cache del getter `root`,
+ *  por ejemplo— caen en el target del proxy (un `{}` vacío) en vez de en el
+ *  driver. `root` se quedaba entonces en `null` para siempre y toda subida
+ *  moría en `path.join(null, ...)`, en local y en producción por igual. Leyendo
+ *  con el driver como `receiver` y ligando los métodos, `this` es el driver
+ *  tanto en getters como en métodos. */
 export const storage: StorageDriver = new Proxy({} as StorageDriver, {
-  get(_target, prop, receiver) {
-    return Reflect.get(storageDriver(), prop, receiver);
+  get(_target, prop) {
+    const driver = storageDriver();
+    const value = Reflect.get(driver, prop, driver);
+    return typeof value === "function" ? value.bind(driver) : value;
   },
 });
 

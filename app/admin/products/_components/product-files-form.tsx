@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import type { ProductFile, ProductFileGroup } from "@/lib/db/schema";
 import { FILE_TYPES } from "@/lib/constants";
+import { uploadFile } from "@/lib/client/upload";
 import {
   createProductFileGroup,
   deleteProductFileGroup,
@@ -262,29 +263,16 @@ export function ProductFilesForm({ productId, files, groups }: ProductFilesFormP
   const handleUpload = async (i: number, file: File | undefined) => {
     if (!file) return;
     patchRow(i, { uploading: true, uploadError: null });
-    const fd = new FormData();
-    fd.append("productId", productId);
-    fd.append("file", file);
     try {
-      const res = await fetch("/api/files/upload", { method: "POST", body: fd });
-      const json = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        storageKey?: string;
-        mimeType?: string;
-        sizeBytes?: number;
-        error?: string;
-      };
-      if (!res.ok || !json.ok || !json.storageKey) {
-        throw new Error(json.error ?? "Error al subir el archivo.");
-      }
+      const json = await uploadFile(productId, file);
       const current = rowsRef.current;
       const next = current.map((r, idx) =>
         idx === i
           ? {
               ...r,
-              storageKey: json.storageKey as string,
-              mimeType: json.mimeType ?? null,
-              sizeBytes: json.sizeBytes ?? null,
+              storageKey: json.storageKey,
+              mimeType: json.mimeType,
+              sizeBytes: json.sizeBytes,
               name: file.name,
               fileType: json.mimeType ? inferFileType(json.mimeType) : current[i].fileType,
               uploading: false,
@@ -341,29 +329,16 @@ export function ProductFilesForm({ productId, files, groups }: ProductFilesFormP
       }
 
       try {
-        const fd = new FormData();
-        fd.append("productId", productId);
-        fd.append("file", file);
-        const res = await fetch("/api/files/upload", { method: "POST", body: fd });
-        const json = (await res.json().catch(() => ({}))) as {
-          ok?: boolean;
-          storageKey?: string;
-          mimeType?: string;
-          sizeBytes?: number;
-          error?: string;
-        };
-        if (!res.ok || !json.ok || !json.storageKey) {
-          throw new Error(json.error ?? "Error al subir el archivo.");
-        }
+        const json = await uploadFile(productId, file);
         newRows.push({
           id: crypto.randomUUID(),
           productId,
           name: displayName,
           description: null,
           fileType: json.mimeType ? inferFileType(json.mimeType) : "other",
-          mimeType: json.mimeType ?? null,
-          sizeBytes: json.sizeBytes ?? null,
-          storageKey: json.storageKey as string,
+          mimeType: json.mimeType,
+          sizeBytes: json.sizeBytes,
+          storageKey: json.storageKey,
           storageProvider: "local",
           downloadLimit: null,
           groupId,

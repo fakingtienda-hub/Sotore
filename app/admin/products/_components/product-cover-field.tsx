@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 
+import { uploadFile } from "@/lib/client/upload";
+
 type ProductCoverFieldProps = {
   productId: string | null;
   initialUrl: string | null;
@@ -41,19 +43,8 @@ export function ProductCoverField({ productId, initialUrl, onCommitted }: Produc
     }
     setBusy(true);
     setError(null);
-    const fd = new FormData();
-    fd.append("productId", productId);
-    fd.append("file", file);
     try {
-      const res = await fetch("/api/files/upload", { method: "POST", body: fd });
-      const json = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        storageKey?: string;
-        error?: string;
-      };
-      if (!res.ok || !json.ok || !json.storageKey) {
-        throw new Error(json.error ?? "No se pudo subir la imagen.");
-      }
+      const json = await uploadFile(productId, file);
       commit(`/api/files/${json.storageKey}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo subir la imagen.");
