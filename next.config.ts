@@ -2,6 +2,21 @@ import type { NextConfig } from "next";
 
 const isProd = process.env.NODE_ENV === "production";
 
+/* La subida de archivos va directa al bucket con una URL presignada, o sea
+   que el navegador hace un PUT cross-origin a STORAGE_ENDPOINT. Sin agregarlo
+   a connect-src la CSP lo bloquea con "Refused to connect" y la subida falla
+   aunque R2, el CORS y la firma estén correctos. Se deriva de la variable de
+   entorno para no dejar el host hardcodeado. */
+const storageOrigin = (() => {
+  const raw = process.env.STORAGE_ENDPOINT;
+  if (!raw) return "";
+  try {
+    return ` ${new URL(raw).origin}`;
+  } catch {
+    return "";
+  }
+})();
+
 /* CSP de la app. Notas:
    - script-src necesita 'unsafe-inline' porque el App Router de Next inyecta
      el payload serializado del Flight stream en <script> inline. No hay
@@ -16,7 +31,7 @@ const csp = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "media-src 'self' blob:",
-  `connect-src 'self'${isProd ? "" : " ws: wss:"}`,
+  `connect-src 'self'${storageOrigin}${isProd ? "" : " ws: wss:"}`,
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'none'",
