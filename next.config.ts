@@ -7,11 +7,15 @@ const isProd = process.env.NODE_ENV === "production";
    a connect-src la CSP lo bloquea con "Refused to connect" y la subida falla
    aunque R2, el CORS y la firma estén correctos. Se deriva de la variable de
    entorno para no dejar el host hardcodeado. */
-const storageOrigin = (() => {
+const storageOrigins = (() => {
   const raw = process.env.STORAGE_ENDPOINT;
   if (!raw) return "";
   try {
-    return ` ${new URL(raw).origin}`;
+    const { origin, hostname } = new URL(raw);
+    /* El cliente S3 direcciona en virtual-hosted style, así que la petición
+       real va a https://<bucket>.<host>. Un source de host en CSP no incluye
+       los subdominios, por eso hace falta además la forma con comodín. */
+    return ` ${origin} https://*.${hostname}`;
   } catch {
     return "";
   }
@@ -31,7 +35,7 @@ const csp = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "media-src 'self' blob:",
-  `connect-src 'self'${storageOrigin}${isProd ? "" : " ws: wss:"}`,
+  `connect-src 'self'${storageOrigins}${isProd ? "" : " ws: wss:"}`,
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'none'",
