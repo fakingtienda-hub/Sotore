@@ -28,17 +28,31 @@ export type ServerEnv = {
   authTrustedOrigins: string[];
 };
 
-const required = (name: string): string => {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  if (name === "AUTH_SECRET" && value.length < 32)
+const optional = (name: string, fallback: string): string => process.env[name] ?? fallback;
+
+const firstPresent = (...names: string[]): string => {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  return "";
+};
+
+/** Resuelve una variable obligatoria aceptando alias, en orden de prioridad. La
+ *  integracion de Postgres de Vercel (y la de Supabase) publican la misma
+ *  conexion como `POSTGRES_URL` / `POSTGRES_PRISMA_URL`, no como `DATABASE_URL`:
+ *  sin estos alias hay que copiar el valor a mano y basta con olvidar una
+ *  variable para que toda ruta que toque la base reviente en runtime. */
+const requiredAny = (names: string[]): string => {
+  const value = firstPresent(...names);
+  if (!value)
+    throw new Error(`Missing required environment variable: set ${names.join(" or ")}`);
+  if (names.includes("AUTH_SECRET") && value.length < 32)
     throw new Error(
       "AUTH_SECRET must be at least 32 characters. Generate with: openssl rand -base64 32",
     );
   return value;
 };
-
-const optional = (name: string, fallback: string): string => process.env[name] ?? fallback;
 
 function buildServerEnv(): ServerEnv {
   const wompiEnvRaw = optional("WOMPI_ENV", "sandbox");
@@ -48,9 +62,9 @@ function buildServerEnv(): ServerEnv {
 
   return {
     appUrl: optional("NEXT_PUBLIC_APP_URL", "http://localhost:3000"),
-    databaseUrl: required("DATABASE_URL"),
+    databaseUrl: requiredAny(["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PRISMA_URL"]),
     databasePoolMax: Number(optional("DATABASE_POOL_MAX", "5")),
-    authSecret: required("AUTH_SECRET"),
+    authSecret: requiredAny(["AUTH_SECRET", "BETTER_AUTH_SECRET"]),
     emailProvider: optional("EMAIL_PROVIDER", "console") as ServerEnv["emailProvider"],
     emailApiKey: optional("EMAIL_API_KEY", ""),
     emailFrom: optional("EMAIL_FROM", "Fakingstore <hola@fakingstore.com>"),
