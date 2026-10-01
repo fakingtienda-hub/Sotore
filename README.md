@@ -73,11 +73,21 @@ Producción: **https://sotore-psi.vercel.app** (Vercel, deploy automático desde
 
 ### ⬜ Pendiente: configurar el bucket de R2 (bloquea la subida de portadas)
 
-Es lo único que falta para poder subir una imagen de portada o un archivo de producto desde la UI. En producción la ruta proxied responde `500` con `"Error al escribir el archivo."` (el log de la función muestra el `EROFS` del filesystem de solo lectura).
+Es lo único que falta para poder subir una imagen de portada o un archivo de producto desde la UI. En producción la ruta proxied responde `500` con `"Error al escribir el archivo."`: el filesystem de Vercel es de solo lectura salvo `/tmp`, así que el driver de disco no puede escribir nada.
 
-1. En Cloudflare: **R2 → Create bucket** (por ejemplo `sotore-media`).
-2. **Manage R2 API Tokens → Create API Token**, con *Object Read & Write* limitado a ese bucket. Devuelve Access Key ID, Secret Access Key y el endpoint S3.
-3. En el bucket, **Settings → CORS** (necesario para la subida directa desde el navegador):
+Bucket: **`productos-tienda`**. `STORAGE_BUCKET` y `STORAGE_ENDPOINT` ya están cargados en Vercel (production y preview). **Faltan las dos claves.**
+
+1. En Cloudflare: **R2 → Overview → Manage R2 API Tokens → Create Account API Token**.
+2. Permiso **Object Read & Write**, con alcance **Apply to specific buckets only** → `productos-tienda`. Preferí *Account API Token* sobre *User*: el de usuario queda inactivo si te sacan el rol de la cuenta y la tienda se queda sin poder subir archivos sin causa aparente.
+3. **Create API Token** muestra **Access Key ID** y **Secret Access Key** una sola vez. Guardalos antes de cerrar la pestaña.
+4. En Vercel (Settings → Environment Variables), agregar las dos que faltan:
+
+   | Variable | Origen |
+   |----------|--------|
+   | `STORAGE_ACCESS_KEY_ID` | *Access Key ID* del token |
+   | `STORAGE_SECRET_ACCESS_KEY` | *Secret Access Key* del token |
+
+5. En el bucket, **Settings → CORS**. **No es opcional**: el cliente siempre pide primero una URL presignada y sube directo desde el navegador, así que sin CORS falla cualquier imagen, por chica que sea.
 
    ```json
    [{ "AllowedOrigins": ["https://sotore-psi.vercel.app"],
@@ -87,18 +97,11 @@ Es lo único que falta para poder subir una imagen de portada o un archivo de pr
       "MaxAgeSeconds": 3600 }]
    ```
 
-4. En Vercel (Settings → Environment Variables), agregar:
+6. Redeploy (Vercel no aplica variables nuevas al deployment vivo) y probar la subida.
 
-   | Variable | Valor |
-   |----------|-------|
-   | `STORAGE_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
-   | `STORAGE_ACCESS_KEY_ID` | del token R2 |
-   | `STORAGE_SECRET_ACCESS_KEY` | del token R2 |
-   | `STORAGE_BUCKET` | nombre del bucket |
+Comprobaciones esperadas: `POST /api/files/upload-url` devuelve una URL firmada en vez de `501`, y `POST /api/files/upload` deja de dar `500`.
 
-5. Redeploy y probar. Sin las variables, `POST /api/files/upload-url` responde `501` y el cliente usa la ruta proxied a propósito.
-
-> Las credenciales van directo en el dashboard de Vercel; no pegarlas en el chat ni en `.env.local` versionado.
+> Las credenciales van directo en el dashboard de Vercel; no pegarlas en el chat ni en `.env.local`, que está versionado.
 
 
 ## Puesta en producción
