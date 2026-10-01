@@ -16,13 +16,19 @@ import {
 } from "@/lib/server/storage-driver";
 import { createR2Storage } from "@/lib/server/storage-r2";
 
-const LOCAL_ROOT = path.isAbsolute(serverEnv.storageDir)
-  ? serverEnv.storageDir
-  : path.join(process.cwd(), serverEnv.storageDir);
-
 export class LocalStorage implements StorageDriver {
   readonly kind = "local" as const;
-  private root = LOCAL_ROOT;
+
+  /** Se resuelve en el primer uso, no al construir el driver: `next build`
+   *  importa esta módulo para recoger page data y no debe leer el entorno. */
+  private rootCache: string | null = null;
+
+  private get root(): string {
+    this.rootCache ??= path.isAbsolute(serverEnv.storageDir)
+      ? serverEnv.storageDir
+      : path.join(process.cwd(), serverEnv.storageDir);
+    return this.rootCache;
+  }
 
   /** Normaliza la storageKey y devuelve la ruta absoluta bajo el root.
    *  Rechaza travesía de directorios (..), rutas absolutas y bytes nulos. */
@@ -175,7 +181,20 @@ function selectStorage(): StorageDriver {
   return new LocalStorage();
 }
 
-export const storage: StorageDriver = selectStorage();
+let storageInstance: StorageDriver | null = null;
+
+function storageDriver(): StorageDriver {
+  storageInstance ??= selectStorage();
+  return storageInstance;
+}
+
+/** El driver se elige en el primer uso. `next build` importa esta módulo para
+ *  recoger page data; elegirlo aquí exigiría el entorno de storage en build. */
+export const storage: StorageDriver = new Proxy({} as StorageDriver, {
+  get(_target, prop, receiver) {
+    return Reflect.get(storageDriver(), prop, receiver);
+  },
+});
 
 export { StorageError, mimeFor };
 export type { StorageDriver, GetResult, PutResult, StorageRange };
