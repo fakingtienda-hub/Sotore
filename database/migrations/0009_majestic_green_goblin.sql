@@ -1,0 +1,1 @@
+ALTER TABLE "products" ALTER COLUMN "theme" SET DEFAULT 'premium';

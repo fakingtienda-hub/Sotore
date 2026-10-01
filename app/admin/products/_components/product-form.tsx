@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import { createProduct, updateProduct } from "@/lib/server/actions/products";
 
-import { PRODUCT_STATUSES, LANDING_THEMES } from "@/lib/constants";
+import { PRODUCT_STATUSES, LANDING_THEMES, DEFAULT_LANDING_THEME } from "@/lib/constants";
 import { AutosaveField } from "@/app/admin/_components/autosave-field";
 import { ProductCoverField } from "./product-cover-field";
 
@@ -66,7 +66,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
       price: toCents(String(fd.get("price") ?? "")),
       compareAtPrice: fd.get("compareAtPrice") ? toCents(String(fd.get("compareAtPrice"))) : null,
       currency: "COP",
-      theme: String(fd.get("theme") ?? "costura"),
+      theme: String(fd.get("theme") ?? DEFAULT_LANDING_THEME),
       status: String(fd.get("status") ?? "draft"),
       coverImageUrl: fd.get("coverImageUrl") ? String(fd.get("coverImageUrl")) : null,
     };
@@ -267,7 +267,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
           <span className="mb-1 block text-sm font-medium text-foreground">Apariencia de la landing</span>
           <AutosaveField
             as="select"
-            value={product?.theme ?? "costura"}
+            value={product?.theme ?? DEFAULT_LANDING_THEME}
             saveOnChange
             onSave={async (v) => save({ theme: v })}
             onSaved={refresh}

@@ -108,7 +108,7 @@ export const products = pgTable(
     price: integer("price").notNull().default(0),
     compareAtPrice: integer("compare_at_price"),
     currency: varchar("currency", { length: 3 }).notNull().default("COP"),
-    theme: varchar("theme", { length: 20 }).notNull().default("costura"),
+    theme: varchar("theme", { length: 20 }).notNull().default("premium"),
     status: varchar("status", { length: 20 }).notNull().default("draft"),
     categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
     tags: jsonb("tags").$type<string[]>(),

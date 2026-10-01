@@ -17,7 +17,7 @@ export const LANDING_THEMES = [
   {
     value: "costura",
     label: "Taller de costura",
-    description: "Tinta café, papel crema e hilo rojo (actual).",
+    description: "Tinta café, papel crema e hilo rojo.",
   },
   {
     value: "amigurumi",
@@ -32,11 +32,14 @@ export const LANDING_THEMES = [
   {
     value: "premium",
     label: "Premium digital",
-    description: "Fondo oscuro grafito con acento dorado y textura de puntos.",
+    description: "Fondo oscuro grafito con acento dorado y textura de puntos (por defecto).",
   },
 ] as const;
 export type LandingTheme = (typeof LANDING_THEMES)[number]["value"];
-export const DEFAULT_LANDING_THEME: LandingTheme = "costura";
+/** Tema por defecto. Vive acá y en ningun otro lado: el resto del codigo
+ *  (formulario de producto, default de la columna, fallback de la landing)
+ *  referencia esta constante para que no vuelvan a divergir. */
+export const DEFAULT_LANDING_THEME: LandingTheme = "premium";
 
 export function isLandingTheme(value: string | null | undefined): value is LandingTheme {
   return LANDING_THEMES.some((t) => t.value === value);

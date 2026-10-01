@@ -64,6 +64,13 @@
       "when": 1790189194551,
       "tag": "0008_public_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790884895052,
+      "tag": "0009_majestic_green_goblin",
+      "breakpoints": true
     }
   ]
 }
