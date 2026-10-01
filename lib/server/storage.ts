@@ -26,7 +26,7 @@ export class LocalStorage implements StorageDriver {
   private get root(): string {
     this.rootCache ??= path.isAbsolute(serverEnv.storageDir)
       ? serverEnv.storageDir
-      : path.join(process.cwd(), serverEnv.storageDir);
+      : path.join(/*turbopackIgnore: true*/ process.cwd(), serverEnv.storageDir);
     return this.rootCache;
   }
 
