@@ -39,6 +39,22 @@ emails/          Plantillas transaccionales HTML
 database/        Migraciones y seeds
 ```
 
+## Base de datos en serverless (Supabase)
+
+La app debe conectarse por el **pooler en modo transaccion** (puerto `6543`), que es
+lo que publica la integracion como `POSTGRES_URL`.
+
+```bash
+# lo publica la integracion de Supabase en Vercel
+POSTGRES_URL=postgresql://usuario:clave@aws-0-<region>.pooler.supabase.com:6543/postgres
+```
+
+Configurar `DATABASE_URL` apuntando al puerto `5432` (modo sesion) hace que el pool
+reutilice conexiones que el pooler ya cerro. Las consultas fallan con
+`Failed query` sin detalle y las paginas del admin devuelven `500` de forma
+intermitente, primero con trafico concurrente y luego de forma permanente.
+`DATABASE_URL` queda solo como respaldo para desarrollo local.
+
 ## Variables de entorno
 
 Ver [.env.example](./.env.example) para la lista completa documentada.
