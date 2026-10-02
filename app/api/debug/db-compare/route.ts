@@ -9,8 +9,8 @@ async function inspección(url: string) {
     const [filas] = await sql.unsafe(`
       select
         (select count(*)::int from products) as productos,
-        (select count(*)::int from landing_sections) as secciones,
-        (select count(*)::int from site_settings) as settings,
+        (select count(*)::int from landing_blocks) as secciones,
+        (select count(*)::int from store_settings) as settings,
         (select string_agg(slug || ':' || status, ', ') from products) as productos_detalle
     `);
     return {
