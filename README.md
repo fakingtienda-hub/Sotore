@@ -53,7 +53,10 @@ Configurar `DATABASE_URL` apuntando al puerto `5432` (modo sesion) hace que el p
 reutilice conexiones que el pooler ya cerro. Las consultas fallan con
 `Failed query` sin detalle y las paginas del admin devuelven `500` de forma
 intermitente, primero con trafico concurrente y luego de forma permanente.
-`DATABASE_URL` queda solo como respaldo para desarrollo local.
+
+En produccion **no hay que definir `DATABASE_URL`**: sin esa variable gana
+`POSTGRES_URL` y el codigo no depende de un orden de prioridades. Para desarrollo
+local, `DATABASE_URL` en `.env.local` si es lo que se usa.
 
 ## Variables de entorno
 

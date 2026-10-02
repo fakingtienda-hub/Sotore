@@ -62,15 +62,16 @@ function buildServerEnv(): ServerEnv {
 
   return {
     appUrl: optional("NEXT_PUBLIC_APP_URL", "http://localhost:3000"),
-    /* En Vercel (serverless) tiene que ir por el pooler en MODO TRANSACCION
-     * (puerto 6543), que es el que publica la integracion como POSTGRES_URL. El
+/* En Vercel (serverless) tiene que ir por el pooler en MODO TRANSACCION
+     * (puerto 6543), que es lo que publica la integracion como POSTGRES_URL. El
      * modo sesion (puerto 5432, que es lo que trae DATABASE_URL) cierra las
      * conexiones ociosas y las que quedan en el pool se reutilizan muertas: las
      * consultas fallan con "Failed query" sin detalle, primero en los rafitos y
-     * con el tiempo en forma de 500 al renderizar la pagina. Por eso el pooler
-     * va primero; DATABASE_URL queda como respaldo y se puede usar si
-     * DEVELOPMENT apunta a una Postgres local. */
-    databaseUrl: requiredAny(["POSTGRES_URL", "DATABASE_URL", "POSTGRES_PRISMA_URL"]),
+     * con el tiempo en forma de 500 al renderizar la pagina. En produccion no
+     * hay que definir DATABASE_URL: sin esa variable el pooler gana y el codigo
+     * no depende de un orden de prioridades. Para desarrollo local basta con
+     * DATABASE_URL en `.env.local`. */
+    databaseUrl: requiredAny(["POSTGRES_URL", "POSTGRES_PRISMA_URL", "DATABASE_URL"]),
     databasePoolMax: Number(optional("DATABASE_POOL_MAX", "5")),
     authSecret: requiredAny(["AUTH_SECRET", "BETTER_AUTH_SECRET"]),
     emailProvider: optional("EMAIL_PROVIDER", "console") as ServerEnv["emailProvider"],
