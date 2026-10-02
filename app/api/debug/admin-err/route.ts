@@ -29,12 +29,14 @@ async function medir<T>(nombre: string, fn: () => Promise<T>) {
     await fn();
     return { nombre, ok: true, ms: Date.now() - t0 };
   } catch (e) {
-    const err = e as Error & { code?: string };
+    const err = e as Error & { code?: string; cause?: { message?: string; code?: string } };
     return {
       nombre,
       ok: false,
       ms: Date.now() - t0,
       error: err.message,
+      cause: err.cause?.message,
+      causeCode: err.cause?.code,
       code: err.code,
     };
   }
