@@ -321,7 +321,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
         <AutosaveField
           value={product?.shortDescription ?? ""}
           maxLength={300}
-          onSave={async (v) => save({ shortDescription: v === "" ? undefined : v })}
+          onSave={async (v) => save({ shortDescription: v === "" ? null : v })}
           onSaved={refresh}
           className={inputClass}
         />
@@ -334,7 +334,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
           value={product?.description ?? ""}
           rows={6}
           maxLength={10000}
-          onSave={async (v) => save({ description: v === "" ? undefined : v })}
+          onSave={async (v) => save({ description: v === "" ? null : v })}
           onSaved={refresh}
           className={inputClass}
         />

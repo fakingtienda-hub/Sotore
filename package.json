@@ -22,6 +22,8 @@
     "verify:media-policy": "tsx scripts/verify-media-policy.ts",
     "verify:crm-currency": "tsx scripts/verify-crm-currency.ts",
     "verify:order-anomalies": "tsx --conditions=react-server scripts/verify-order-anomalies.ts",
+    "verify:coupon-race": "tsx --conditions=react-server scripts/verify-coupon-race.ts",
+    "verify:pack-limit": "tsx --conditions=react-server scripts/verify-pack-limit.ts",
     "verify:r2": "tsx --conditions=react-server scripts/verify-r2.ts"
   },
   "dependencies": {

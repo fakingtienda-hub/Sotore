@@ -128,6 +128,8 @@ async function main() {
     const [row] = await db
       .select({
         id: schema.orders.id,
+        status: schema.orders.status,
+        paidAt: schema.orders.paidAt,
         userId: schema.orders.userId,
         gatewayPayload: schema.orders.gatewayPayload,
       })
@@ -177,6 +179,50 @@ async function main() {
     "quien ya tenía el producto no se marca como anomalía",
     (f5.get(o5) ?? []).length === 0,
   );
+
+  console.log("--- `undelivered` solo en órdenes aprobadas y recientes ---");
+
+  // Regresión: antes `getFlagsForOrders` no miraba `status` ni `paidAt`, así que
+  // marcaba como "sin entregar" cualquier orden pendiente o rechazada (que aún no
+  // han pagado). El panel quedaba con anomalías permanentes y las reales se
+  // perdían de vista.
+  await db.update(schema.purchases).set({ status: "revoked", revokedAt: new Date() }).where(eq(schema.purchases.userId, uid));
+
+  const pendingOrder = await makeOrder("pending");
+  const fp = await getFlagsForOrders([await load(pendingOrder)]);
+  assert(
+    "pending sin compra activa NO es anomalía (aún no se pagó)",
+    (fp.get(pendingOrder) ?? []).length === 0,
+  );
+
+  const declinedOrder = await makeOrder("declined");
+  const fd = await getFlagsForOrders([await load(declinedOrder)]);
+  assert(
+    "declined sin compra activa NO es anomalía",
+    (fd.get(declinedOrder) ?? []).length === 0,
+  );
+
+  // Y el caso real sigue detectándose: approved + pagado + sin entrega.
+  const freshApproved = await makeOrder("approved");
+  const ff = await getFlagsForOrders([await load(freshApproved)]);
+  assert(
+    "approved pagado sin entrega SÍ es anomalía",
+    ff.get(freshApproved)?.includes("undelivered") === true,
+  );
+
+  // Approved pero pagado hace más de la ventana de escaneo: fuera del radar.
+  const oldOrder = await makeOrder("approved", { paidAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) });
+  const fo = await getFlagsForOrders([await load(oldOrder)]);
+  assert(
+    "approved anciento fuera de la ventana NO se escanea",
+    (fo.get(oldOrder) ?? []).length === 0,
+  );
+
+  // Se reactiva para no arrastrar el estado a las comprobaciones siguientes.
+  await db
+    .update(schema.purchases)
+    .set({ status: "active", revokedAt: null })
+    .where(eq(schema.purchases.userId, uid));
 
   console.log("--- predicados SQL (lo que typecheck no valida) ---");
 

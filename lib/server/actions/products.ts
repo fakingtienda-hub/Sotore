@@ -25,8 +25,8 @@ const productInputSchema = z.object({
     .min(2)
     .max(200)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug inválido (solo minúsculas, números y guiones)."),
-  shortDescription: z.string().trim().max(300).optional(),
-  description: z.string().trim().max(10000).optional(),
+  shortDescription: z.string().trim().max(300).nullable().optional(),
+  description: z.string().trim().max(10000).nullable().optional(),
   price: priceSchema,
   compareAtPrice: priceSchema.optional().nullable(),
   // Wompi (Colombia) solo procesa COP: la tienda vende únicamente en pesos colombianos.

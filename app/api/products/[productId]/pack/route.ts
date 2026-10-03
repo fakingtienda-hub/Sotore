@@ -1,4 +1,5 @@
-import { and, eq, isNotNull, max } from "drizzle-orm";
+import { and, count, eq, isNotNull, max, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import type { NextRequest } from "next/server";
 
@@ -11,6 +12,13 @@ import { rateLimit } from "@/lib/server/rate-limit";
 import { serverEnv } from "@/lib/serverEnv";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Señal interna para abortar (ROLLBACK) la transacción que registra las
+ * descargas del pack cuando alguno de los archivos ya agotó su límite.
+ * No debe escapar a la respuesta: el `catch` la traduce a 429.
+ */
+class PackLimitReachedError extends Error {}
 
 export async function GET(
   request: NextRequest,
@@ -130,7 +138,95 @@ export async function GET(
 
   const safeSlug = product.slug.replace(/[^a-z0-9-]/gi, "") || product.id;
 
-  // --- 5) Servir el ZIP ----------------------------------------------------
+  // --- 5b) Limite de descargas ---------------------------------------------
+  // El ZIP entrega TODOS los archivos del producto, asi que sin este control
+  // esquivaba `productFiles.downloadLimit`: la ruta por archivo cuenta con
+  // advisory lock, el pack no contaba nada y el reporte de descargas del admin
+  // tampoco lo registraba. Se aplica la misma regla por cada archivo incluido:
+  // si alguno ya esta agotado, el pack se rechaza entero.
+  //
+  // Va DESPUES de resolver el pack (paso 4/5) y de confirmar que existe en
+  // almacenamiento: una descarga fallida no debe consumir el limite ni ensuciar
+  // el historial.
+  if (purchase) {
+    // `zipSizeBytes` puede venir cacheado y el objeto haber desaparecido, asi
+    // que en R2 se confirma contra el bucket antes de consumir nada.
+    if (storage.kind === "r2") {
+      try {
+        await storage.stat(product.zipKey as string);
+      } catch {
+        return Response.json({ error: "El pack no se encontro en almacenamiento." }, { status: 404 });
+      }
+    }
+
+    const included = await db
+      .select({ id: schema.productFiles.id, downloadLimit: schema.productFiles.downloadLimit })
+      .from(schema.productFiles)
+      .where(
+        and(
+          eq(schema.productFiles.productId, productId),
+          eq(schema.productFiles.isActive, true),
+          isNotNull(schema.productFiles.groupId),
+        ),
+      );
+
+    const limited = included.filter((f) => f.downloadLimit != null);
+    if (limited.length > 0) {
+      const ip =
+        (
+          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+          request.headers.get("x-real-ip") ??
+          null
+        )?.slice(0, 45) ?? null;
+      const userAgent = request.headers.get("user-agent") ?? null;
+
+      // Si un archivo esta agotado se lanza para ABORTAR la transaccion: con un
+      // `return` normal se confirmarian las inserciones de los archivos ya
+      // contados antes de toparse con el agotado, gastando sus limites.
+      try {
+        await db.transaction(async (tx) => {
+          // Orden estable: varios locks tomados siempre en el mismo orden evitan
+          // deadlocks si dos descargas del pack se cruzan.
+          for (const file of limited.sort((a, b) => a.id.localeCompare(b.id))) {
+            await tx.execute(
+              sql`SELECT pg_advisory_xact_lock(hashtext(${`dl:${userId}:${file.id}`}))`,
+            );
+            const [{ cnt }] = await tx
+              .select({ cnt: count() })
+              .from(schema.downloads)
+              .where(
+                and(eq(schema.downloads.userId, userId), eq(schema.downloads.fileId, file.id)),
+              );
+            if (cnt >= (file.downloadLimit as number)) {
+              throw new PackLimitReachedError();
+            }
+            await tx.insert(schema.downloads).values({
+              id: randomUUID(),
+              userId,
+              productId,
+              fileId: file.id,
+              purchaseId: purchase.id,
+              ipAddress: ip,
+              userAgent,
+            });
+          }
+        });
+      } catch (cause) {
+        if (cause instanceof PackLimitReachedError) {
+          return Response.json(
+            {
+              error:
+                "Has alcanzado el limite de descargas de algun archivo de este pack. Puedes descargar los archivos sueltos.",
+            },
+            { status: 429 },
+          );
+        }
+        throw cause;
+      }
+    }
+  }
+
+  // --- 6) Servir el ZIP ----------------------------------------------------
   let total = product.zipSizeBytes ?? null;
   try {
     if (total == null) {

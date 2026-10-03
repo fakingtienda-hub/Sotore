@@ -67,26 +67,35 @@ export async function claimCouponForApprovedOrder(orderId: string): Promise<void
  * posterior a una aprobación (VOIDED/DECLINED/ERROR tras approved). Idempotente.
  */
 export async function releaseCouponForOrder(orderId: string): Promise<void> {
-  const rows = await db
-    .select({ id: schema.couponUsages.id, couponId: schema.couponUsages.couponId })
-    .from(schema.couponUsages)
-    .where(eq(schema.couponUsages.orderId, orderId));
+  await db.transaction(async (tx) => {
+    // El SELECT va DENTRO de la transacción a propósito. Leyéndolo fuera, dos
+    // llamadas concurrentes (dos webhooks duplicados de Wompi, o el webhook
+    // corriendo junto a la reconciliación) veían la misma fila: ambas tomaban el
+    // lock del cupón por turnos y las dos ejecutaban el `GREATEST(... - 1, 0)`.
+    // El segundo DELETE ya no afectaba filas, pero el decremento quedaba
+    // confirmado y `usedCount` derivaba a la baja, gastando el presupuesto
+    // `maxUses` sin que nada lo delatara.
+    // Bloqueando las filas de uso (`FOR UPDATE`), la segunda transacción espera y
+    // al releerlas ya no existen: no toca `usedCount`.
+    // Cubierto por `scripts/verify-coupon-race.ts`.
+    const rows = await tx
+      .select({ id: schema.couponUsages.id, couponId: schema.couponUsages.couponId })
+      .from(schema.couponUsages)
+      .where(eq(schema.couponUsages.orderId, orderId))
+      .for("update");
 
-  if (rows.length === 0) return;
-
-  for (const row of rows) {
-    await db.transaction(async (tx) => {
+    for (const row of rows) {
       const [coupon] = await tx
         .select({ id: schema.coupons.id })
         .from(schema.coupons)
         .where(eq(schema.coupons.id, row.couponId))
         .for("update");
-      if (!coupon) return;
+      if (!coupon) continue;
       await tx
         .update(schema.coupons)
         .set({ usedCount: sql`GREATEST(${schema.coupons.usedCount} - 1, 0)` })
         .where(eq(schema.coupons.id, coupon.id));
       await tx.delete(schema.couponUsages).where(eq(schema.couponUsages.id, row.id));
-    });
-  }
+    }
+  });
 }

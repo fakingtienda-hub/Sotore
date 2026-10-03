@@ -635,8 +635,13 @@ export function ProductFilesForm({ productId, files, groups }: ProductFilesFormP
                   id={`fileType-${f.id}`}
                   value={fileTypeIndex(f.fileType)}
                   onChange={(e) => {
-                    patchRow(i, { fileType: FILE_TYPES[Number(e.target.value)] ?? "other" });
-                    commit();
+                    const next = rowsRef.current.map((r, idx) =>
+                      idx === i
+                        ? { ...r, fileType: FILE_TYPES[Number(e.target.value)] ?? "other" }
+                        : r,
+                    );
+                    setRows(next);
+                    commit(next);
                   }}
                   className={input}
                 >
@@ -709,8 +714,11 @@ export function ProductFilesForm({ productId, files, groups }: ProductFilesFormP
                   id={`storageProvider-${f.id}`}
                   value={f.storageProvider}
                   onChange={(e) => {
-                    patchRow(i, { storageProvider: e.target.value });
-                    commit();
+                    const next = rowsRef.current.map((r, idx) =>
+                      idx === i ? { ...r, storageProvider: e.target.value } : r,
+                    );
+                    setRows(next);
+                    commit(next);
                   }}
                   className={input}
                 >

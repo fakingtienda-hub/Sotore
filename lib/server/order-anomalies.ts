@@ -75,7 +75,7 @@ export function hasUndeliveredProduct() {
  * Todo en dos consultas: una por `orderItems` y otra por `purchases`, sin N+1.
  */
 export async function getFlagsForOrders(
-  orders: { id: string; userId: string; gatewayPayload: unknown }[],
+  orders: { id: string; userId: string; status: string; paidAt: Date | null; gatewayPayload: unknown }[],
 ): Promise<Map<string, OrderFlag[]>> {
   const flags = new Map<string, OrderFlag[]>();
   if (orders.length === 0) return flags;
@@ -105,13 +105,23 @@ export async function getFlagsForOrders(
     activeByUser.set(p.userId, set);
   }
 
+  // Ventana de escaneo: una orden cobrada hace mucho queda fuera del radar, igual
+  // que en `countOrderAnomalies`. Sin esto, el detalle y el contador discreparían.
+  const scanFloor = daysAgo(UNDELIVERED_SCAN_DAYS);
+
   for (const order of orders) {
     const found: OrderFlag[] = [];
 
     if (hasIgnoredReasonValue(order.gatewayPayload)) found.push("amount_mismatch");
 
+    // `undelivered` solo aplica a órdenes APPROVED dentro de la ventana: sin pago
+    // confirmado todavía no hay nada que entregar, y marcar `pending`/`declined`
+    // hacía que el panel mostrara siempre anomalías y ahogara las reales.
+    const isScannable =
+      order.status === "approved" && order.paidAt != null && order.paidAt >= scanFloor;
+
     const orderItems = items.filter((i) => i.orderId === order.id);
-    if (orderItems.length > 0) {
+    if (isScannable && orderItems.length > 0) {
       const owned = activeByUser.get(order.userId) ?? new Set<string>();
       if (orderItems.some((i) => !owned.has(i.productId))) found.push("undelivered");
     }
@@ -172,6 +182,7 @@ export async function listAnomalousOrderCodes(
       id: schema.orders.id,
       code: schema.orders.code,
       status: schema.orders.status,
+      paidAt: schema.orders.paidAt,
       userId: schema.orders.userId,
       gatewayPayload: schema.orders.gatewayPayload,
     })
