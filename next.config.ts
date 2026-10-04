@@ -27,20 +27,29 @@ const storageOrigins = (() => {
      recursos de terceros cargados (next/font se auto-aloja en la build).
    - 'unsafe-eval' solo en desarrollo: lo usa el HMR de Next.
    - form-action permite el Web Checkout hospedado de Wompi (el form de la
-     pasarela se envía por GET a ese origen). */
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "media-src 'self' blob:",
-  `connect-src 'self'${storageOrigins}${isProd ? "" : " ws: wss:"}`,
-  "object-src 'none'",
-  "base-uri 'self'",
-  "frame-ancestors 'none'",
-  "form-action 'self' https://checkout.wompi.co",
-].join("; ");
+     pasarela se envía por GET a ese origen).
+   - frame-ancestors va en 'self', NO en 'none': el editor de la landing en
+     /admin/landing muestra la vista previa dentro de un <iframe src="/">, y
+     con 'none' el navegador se la rechaza (queda el marco en blanco) aunque
+     sea el mismo origen. 'self' sigue impidiendo que un sitio externo enclose
+     la app, que es el ataque de clickjacking que esa directiva previene. */
+const buildCsp = (frameAncestors: "'self'" | "'none'") =>
+  [
+    "default-src 'self'",
+    `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "media-src 'self' blob:",
+    `connect-src 'self'${storageOrigins}${isProd ? "" : " ws: wss:"}`,
+    "object-src 'none'",
+    "base-uri 'self'",
+    `frame-ancestors ${frameAncestors}`,
+    "form-action 'self' https://checkout.wompi.co",
+  ].join("; ");
+
+const csp = buildCsp("'self'");
+const cspLocked = buildCsp("'none'");
 
 const nextConfig: NextConfig = {
   /* En desarrollo Next bloquea las peticiones cross-origin a assets y
@@ -49,9 +58,21 @@ const nextConfig: NextConfig = {
      túnel. Sin esto la página carga pero NO hidrata: los bloques `.sf-reveal`
      se quedan en opacity 0 y solo se ve el fondo y la cabecera. */
   allowedDevOrigins: ["*.trycloudflare.com"],
-  /* mupdf (WASM + .wasm hermano) y sharp (addon nativo) se cargan desde
-     node_modules en runtime; no deben compilarse/bundlearse en la build. */
-  serverExternalPackages: ["mupdf", "sharp"],
+  /* Paquetes que se cargan desde node_modules en runtime en vez de
+     empaquetarse en la función: reduce el bundle (menos cold start).
+     - mupdf (WASM + .wasm hermano) y sharp (addon nativo): no se pueden
+       compilar en la build.
+     - archiver y los helpers de @aws-sdk: pesados y solo usados por la ruta
+       del pack y el storage; `@aws-sdk/client-s3` y `sharp` ya los excluye
+       Next por defecto, pero los listamos para que quede explícito. */
+  serverExternalPackages: [
+    "mupdf",
+    "sharp",
+    "archiver",
+    "@aws-sdk/client-s3",
+    "@aws-sdk/lib-storage",
+    "@aws-sdk/s3-request-presigner",
+  ],
   async headers() {
     return [
       {
@@ -66,7 +87,13 @@ const nextConfig: NextConfig = {
       {
         // Áreas autenticadas/operativas: no deben indexarse ni seguirse.
         source: "/(admin|library)/:path*",
-        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          /* Segunda cabecera CSP con frame-ancestors 'none'. Con varias cabeceras
+             CSP el navegador las aplica TODAS y se queda con la más restrictiva:
+             el admin sigue sin poder ser embebido ni por la propia app. */
+          { key: "Content-Security-Policy", value: cspLocked },
+        ],
       },
     ];
   },
