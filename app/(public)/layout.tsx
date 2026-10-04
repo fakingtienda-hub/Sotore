@@ -2,6 +2,7 @@ import { getLandingSiteConfig } from "@/lib/server/actions/landing";
 import { getLandingTheme } from "@/lib/server/landing-theme";
 import { getLandingFont } from "@/lib/landing-fonts";
 import { PublicFooter, PublicHeader } from "@/components/storefront/public-chrome";
+import { PreviewBridge } from "@/components/storefront/preview-bridge";
 
 const storeName = process.env.NEXT_PUBLIC_STORE_NAME ?? "Fakingstore";
 
@@ -32,6 +33,9 @@ export default async function PublicLayout({ children }: { children: React.React
       {children}
 
       <PublicFooter site={site} storeName={storeName} />
+
+      {/* Solo hace algo dentro del iframe del editor; inerte en público. */}
+      <PreviewBridge />
     </div>
   );
 }

@@ -72,8 +72,18 @@ export async function POST(request: Request) {
     return Response.json({ error: "JSON inválido." }, { status: 400 });
   }
   const eventPayload = payload as WompiEventPayload;
-  const checksum = eventPayload.signature?.checksum ?? headerChecksum;
-  if (!checksum || !verifyWompiEventChecksum(eventPayload, config.eventsSecret, checksum)) {
+  const signature = eventPayload.signature ?? {};
+  const checksum = signature.checksum ?? headerChecksum;
+
+  if (!checksum || !Array.isArray(signature.properties) || signature.properties.length === 0) {
+    return Response.json({ error: "Firma del webhook inválida." }, { status: 401 });
+  }
+
+  if (signature.checksum && headerChecksum && signature.checksum.toLowerCase() !== headerChecksum.toLowerCase()) {
+    return Response.json({ error: "Firma del webhook inválida." }, { status: 401 });
+  }
+
+  if (!verifyWompiEventChecksum(eventPayload, config.eventsSecret, checksum)) {
     return Response.json({ error: "Firma del webhook inválida." }, { status: 401 });
   }
 

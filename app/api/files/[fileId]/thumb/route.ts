@@ -8,6 +8,9 @@ import { rateLimit } from "@/lib/server/rate-limit";
 import { getOrCreateThumb, thumbDefFor } from "@/lib/server/thumbs";
 
 export const dynamic = "force-dynamic";
+/* Renderizar un PDF/imagen (mupdf/sharp) puede tardar en el primer uso por el
+   cold start del WASM/addon; damos margen sobre el timeout por defecto. */
+export const maxDuration = 60;
 
 export async function GET(
   _request: NextRequest,

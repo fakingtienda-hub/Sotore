@@ -10,6 +10,13 @@ import * as schema from "./schema";
 function createDb() {
   const queryClient = postgres(serverEnv.databaseUrl, {
     max: serverEnv.databasePoolMax,
+    // En serverless la instancia es efímera pero puede reutilizarse minutos:
+    // un cliente ocioso puede quedar apuntando a una conexión que el pooler ya
+    // cerró (el README documenta el fallo intermitente de "Failed query").
+    // Reciclamos por ocio y por edad, y limitamos el connect.
+    idle_timeout: 20,
+    connect_timeout: 10,
+    max_lifetime: 60 * 30,
     prepare: false,
   });
   return drizzle(queryClient, {

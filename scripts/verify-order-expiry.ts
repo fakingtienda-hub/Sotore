@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 
 import { db } from "../lib/db";
 import {
+  expireOrderIfStale,
   expireStalePendingOrders,
   orderExpiresAt,
 } from "../lib/server/order-expiry";
@@ -26,58 +27,74 @@ async function main() {
     throw new Error("No hay usuarios en la BD; corre `npm run db:seed` antes.");
   }
 
-  const staleId = randomUUID();
-  const freshId = randomUUID();
   const stamp = Date.now().toString(36).toUpperCase().slice(-5);
+  const created: string[] = [];
+
+  async function insertPending(code: string, expiresAt: Date): Promise<string> {
+    const id = randomUUID();
+    created.push(id);
+    await db.insert(schema.orders).values({
+      id,
+      code,
+      userId: user.id,
+      status: "pending",
+      subtotal: 100,
+      discount: 0,
+      total: 100,
+      currency: "COP",
+      expiresAt,
+    });
+    return id;
+  }
+
+  async function statusOf(id: string): Promise<string | undefined> {
+    const [row] = await db
+      .select({ status: schema.orders.status })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, id));
+    return row?.status;
+  }
 
   try {
-    const staleCode = `VS-${stamp}-STALE`;
-    const freshCode = `VS-${stamp}-FRESH`;
-    await db.insert(schema.orders).values([
-      {
-        id: staleId,
-        code: staleCode,
-        userId: user.id,
-        status: "pending",
-        subtotal: 100,
-        discount: 0,
-        total: 100,
-        currency: "COP",
-        expiresAt: new Date(Date.now() - 1000),
-      },
-      {
-        id: freshId,
-        code: freshCode,
-        userId: user.id,
-        status: "pending",
-        subtotal: 100,
-        discount: 0,
-        total: 100,
-        currency: "COP",
-        expiresAt: orderExpiresAt(),
-      },
-    ]);
+    // --- Barrido: expira las vencidas y respeta las vigentes ---------------
+    const staleId = await insertPending(`VS-${stamp}-STALE`, new Date(Date.now() - 1000));
+    const freshId = await insertPending(`VS-${stamp}-FRESH`, orderExpiresAt());
 
     const expiredCount = await expireStalePendingOrders();
 
-    const [stale] = await db
-      .select({ status: schema.orders.status })
-      .from(schema.orders)
-      .where(eq(schema.orders.id, staleId));
-    const [fresh] = await db
-      .select({ status: schema.orders.status })
-      .from(schema.orders)
-      .where(eq(schema.orders.id, freshId));
+    assert("la orden vencida pasa a `expired`", (await statusOf(staleId)) === "expired");
+    assert("la orden vigente sigue `pending`", (await statusOf(freshId)) === "pending");
+    assert("expireStalePendingOrders reporta exactamente 1 vencida", expiredCount === 1);
 
-    assert("la orden vencida pasa a `expired`", stale?.status === "expired");
-    assert("la orden vigente sigue `pending`", fresh?.status === "pending");
+    // --- Throttle: una llamada inmediata posterior NO vuelve a barrer ------
+    const throttledId = await insertPending(`VS-${stamp}-THROTTLE`, new Date(Date.now() - 1000));
+    const throttledCount = await expireStalePendingOrders();
+
+    assert("el barrido repetido se salta por el throttle", throttledCount === 0);
     assert(
-      "expireStalePendingOrders reporta exactamente 1 vencida",
-      expiredCount === 1,
+      "la orden vencida sigue `pending` mientras dure el throttle",
+      (await statusOf(throttledId)) === "pending",
     );
+
+    // --- `force` ignora el throttle (lo usa la reconciliación) -------------
+    const forcedCount = await expireStalePendingOrders({ force: true });
+
+    assert("`force` barre aunque el throttle esté vigente", forcedCount === 1);
+    assert("la orden vencida pasa a `expired` con `force`", (await statusOf(throttledId)) === "expired");
+
+    // --- Expiración puntual del camino de pago -----------------------------
+    const singleStaleId = await insertPending(`VS-${stamp}-ONE`, new Date(Date.now() - 1000));
+    const singleFreshId = await insertPending(`VS-${stamp}-ONEF`, orderExpiresAt());
+
+    await expireOrderIfStale(singleStaleId);
+    await expireOrderIfStale(singleFreshId);
+
+    assert("expireOrderIfStale expira la orden vencida", (await statusOf(singleStaleId)) === "expired");
+    assert("expireOrderIfStale no toca la orden vigente", (await statusOf(singleFreshId)) === "pending");
   } finally {
-    await db.delete(schema.orders).where(eq(schema.orders.id, staleId));
-    await db.delete(schema.orders).where(eq(schema.orders.id, freshId));
+    for (const id of created) {
+      await db.delete(schema.orders).where(eq(schema.orders.id, id));
+    }
   }
 
   if (failures > 0) {

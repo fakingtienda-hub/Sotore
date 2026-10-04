@@ -247,7 +247,9 @@ async function recoverMissedPayments(): Promise<ReconcileReport["payments"]> {
 export async function runReconciliation(): Promise<ReconcileReport> {
   const config = await getWompiConfig();
 
-  const expiredBySweep = await expireStalePendingOrders();
+  // Forzado: el cron barre siempre (su conteo alimenta el reporte), sin el
+  // throttle por-instancia que aplica al camino de pago.
+  const expiredBySweep = await expireStalePendingOrders({ force: true });
   const delivery = await repairUndeliveredOrders();
   const payments = await recoverMissedPayments();
 

@@ -6,7 +6,7 @@ import * as schema from "@/lib/db/schema";
 import { buildWompiCheckoutFields, getWompiConfig } from "@/lib/server/wompi";
 import { ownerMatchesOrder } from "@/lib/server/order-ownership";
 import { rateLimit } from "@/lib/server/rate-limit";
-import { expireStalePendingOrders } from "@/lib/server/order-expiry";
+import { expireOrderIfStale, expireStalePendingOrders } from "@/lib/server/order-expiry";
 import { serverEnv } from "@/lib/serverEnv";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       total: schema.orders.total,
       currency: schema.orders.currency,
       userId: schema.orders.userId,
+      expiresAt: schema.orders.expiresAt,
     })
     .from(schema.orders)
     .where(eq(schema.orders.code, parsed.data.orderCode))
@@ -63,6 +64,15 @@ export async function POST(request: Request) {
   }
   if (order.status !== "pending") {
     return Response.json({ error: "La orden ya no está pendiente de pago.", status: order.status }, { status: 409 });
+  }
+  // El barrido global pudo saltarse por el throttle; si ESTA orden ya venció,
+  // la expiramos aquí para no emitir un checkout de algo caducado.
+  if (order.expiresAt && order.expiresAt.getTime() < Date.now()) {
+    await expireOrderIfStale(order.id);
+    return Response.json(
+      { error: "La orden ya no está pendiente de pago.", status: "expired" },
+      { status: 409 },
+    );
   }
 
   const [user] = await db

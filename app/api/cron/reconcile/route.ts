@@ -3,6 +3,9 @@ import { safeTokenEqual } from "@/lib/server/safe-token";
 import { serverEnv } from "@/lib/serverEnv";
 
 export const dynamic = "force-dynamic";
+/* Barrido de órdenes + recuperación de pagos: proceso por lotes que puede
+   exceder el timeout por defecto. */
+export const maxDuration = 60;
 
 /**
  * Reconciliación de pagos. Pensada para que la llame un cron externo

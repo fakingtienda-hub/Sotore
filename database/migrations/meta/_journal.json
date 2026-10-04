@@ -71,6 +71,13 @@
       "when": 1790884895052,
       "tag": "0009_majestic_green_goblin",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791089714147,
+      "tag": "0010_smart_mariko_yashida",
+      "breakpoints": true
     }
   ]
 }

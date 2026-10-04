@@ -12,6 +12,9 @@ import { rateLimit } from "@/lib/server/rate-limit";
 import { serverEnv } from "@/lib/serverEnv";
 
 export const dynamic = "force-dynamic";
+/* Generar el ZIP lee y comprime todos los archivos del producto: con paquetes
+   grandes excede el default de la plataforma. 60s es el máximo en Hobby/Pro. */
+export const maxDuration = 60;
 
 /**
  * Señal interna para abortar (ROLLBACK) la transacción que registra las

@@ -125,6 +125,8 @@ export const products = pgTable(
     uniqueIndex("products_slug_idx").on(t.slug),
     index("products_status_idx").on(t.status),
     index("products_category_idx").on(t.categoryId),
+    /* La ruta pública de portadas busca por `cover_image_url` en cada request. */
+    index("products_cover_image_url_idx").on(t.coverImageUrl),
   ],
 );
 
@@ -209,6 +211,8 @@ export const orders = pgTable(
     index("orders_user_idx").on(t.userId),
     index("orders_status_idx").on(t.status),
     index("orders_created_idx").on(t.createdAt),
+    /* Barrido de caducidad: `WHERE status = 'pending' AND expires_at < now()`. */
+    index("orders_status_expires_idx").on(t.status, t.expiresAt),
   ],
 );
 

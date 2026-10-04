@@ -198,9 +198,16 @@ export function verifyWompiEventChecksum(
   checksumOverride?: string,
 ): boolean {
   const { properties, checksum } = payload.signature ?? {};
-  if (!properties?.length) return false;
-  const value = checksumOverride ?? checksum;
-  if (!value) return false;
+
+  if (!Array.isArray(properties) || properties.length === 0) return false;
+
+  const candidate = checksumOverride ?? checksum;
+  if (!candidate) return false;
+
+  if (checksum && checksumOverride && checksum.toLowerCase() !== checksumOverride.toLowerCase()) {
+    return false;
+  }
+
   const raw =
     properties
       .map((path) => {
@@ -209,5 +216,5 @@ export function verifyWompiEventChecksum(
       })
       .join("") + String(payload.timestamp ?? "") + eventsSecret;
   const expected = createHash("sha256").update(raw, "utf8").digest("hex");
-  return expected.toLowerCase() === value.toLowerCase();
+  return expected.toLowerCase() === candidate.toLowerCase();
 }

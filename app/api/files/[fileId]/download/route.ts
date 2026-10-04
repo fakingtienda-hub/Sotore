@@ -75,9 +75,36 @@ export async function GET(
     }
   }
 
-  // --- 6) Registrar la descarga (solo clientes; el admin de prueba no cuenta)
-  // Se registra en `downloads` después de comprobar almacenamiento, y una
-  // descarga fallida no debe consumir el límite ni el historial.
+  // --- 6) Abrir el archivo ANTES de contabilizar --------------------------
+  // El registro en `downloads` (y el consumo del límite) va DESPUÉS de abrir el
+  // archivo: una descarga que falla por archivo ausente o storage caído no debe
+  // consumir el límite ni quedar en el historial.
+  let total: number;
+  try {
+    total = file.sizeBytes ?? (await storage.stat(file.storageKey)).sizeBytes;
+  } catch (cause) {
+    if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
+      return Response.json({ error: "Archivo no encontrado en almacenamiento." }, { status: 404 });
+    }
+    return Response.json({ error: "Error al servir el archivo." }, { status: 500 });
+  }
+
+  // El runtime siempre trae `destroy` (Readable de Node), pero el tipo
+  // `NodeJS.ReadableStream` no lo declara; lo describimos como opcional.
+  let stream: NodeJS.ReadableStream & { destroy?: () => void };
+  try {
+    stream = await storage.stream(file.storageKey);
+    // Si el archivo desaparece a mitad de lectura, abortamos el stream en
+    // silencio (evita un uncaughtException; el cliente ya recibe cortado).
+    stream.on("error", () => {});
+  } catch (cause) {
+    if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
+      return Response.json({ error: "Archivo no encontrado en almacenamiento." }, { status: 404 });
+    }
+    return Response.json({ error: "Error al servir el archivo." }, { status: 500 });
+  }
+
+  // --- 7) Registrar la descarga (solo clientes; el admin de prueba no cuenta)
   if (purchase) {
     const ip = (
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -90,26 +117,33 @@ export async function GET(
       // Conteo + inserción atómicos con advisory lock por usuario+archivo, para
       // que dos descargas concurrentes no excedan el límite.
       let overLimit = false;
-      await db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`dl:${userId}:${fileId}`}))`);
-        const [{ cnt }] = await tx
-          .select({ cnt: count() })
-          .from(schema.downloads)
-          .where(and(eq(schema.downloads.userId, userId), eq(schema.downloads.fileId, fileId)));
-        if (cnt >= (file.downloadLimit as number)) {
-          overLimit = true;
-          return;
-        }
-        await tx.insert(schema.downloads).values({
-          userId,
-          productId: file.productId,
-          fileId: file.id,
-          purchaseId: purchase.id,
-          ipAddress: ip,
-          userAgent,
+      try {
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`dl:${userId}:${fileId}`}))`);
+          const [{ cnt }] = await tx
+            .select({ cnt: count() })
+            .from(schema.downloads)
+            .where(and(eq(schema.downloads.userId, userId), eq(schema.downloads.fileId, fileId)));
+          if (cnt >= (file.downloadLimit as number)) {
+            overLimit = true;
+            return;
+          }
+          await tx.insert(schema.downloads).values({
+            userId,
+            productId: file.productId,
+            fileId: file.id,
+            purchaseId: purchase.id,
+            ipAddress: ip,
+            userAgent,
+          });
         });
-      });
+      } catch (cause) {
+        // No se pudo contabilizar: cerramos el stream ya abierto antes de propagar.
+        stream.destroy?.();
+        throw cause;
+      }
       if (overLimit) {
+        stream.destroy?.();
         return Response.json(
           { error: `Has alcanzado el límite de ${file.downloadLimit} descarga(s) para este archivo.` },
           { status: 429 },
@@ -130,30 +164,7 @@ export async function GET(
     }
   }
 
-  // --- 7) Servir el archivo por streaming (sin cargarlo en memoria) --------
-  let total: number;
-  try {
-    total = file.sizeBytes ?? (await storage.stat(file.storageKey)).sizeBytes;
-  } catch (cause) {
-    if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
-      return Response.json({ error: "Archivo no encontrado en almacenamiento." }, { status: 404 });
-    }
-    return Response.json({ error: "Error al servir el archivo." }, { status: 500 });
-  }
-
-  let stream;
-  try {
-    stream = await storage.stream(file.storageKey);
-    // Si el archivo desaparece a mitad de lectura, abortamos el stream en
-    // silencio (evita un uncaughtException; el cliente ya recibe cortado).
-    (stream as NodeJS.ReadableStream).on("error", () => {});
-  } catch (cause) {
-    if (cause instanceof StorageError && cause.code === "NOT_FOUND") {
-      return Response.json({ error: "Archivo no encontrado en almacenamiento." }, { status: 404 });
-    }
-    return Response.json({ error: "Error al servir el archivo." }, { status: 500 });
-  }
-
+  // --- 8) Servir el archivo por streaming (sin cargarlo en memoria) --------
   return new Response(
     Readable.toWeb(stream as unknown as Readable) as unknown as ReadableStream,
     {

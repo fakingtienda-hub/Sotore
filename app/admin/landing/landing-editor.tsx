@@ -21,7 +21,7 @@ import { AutosaveField } from "@/app/admin/_components/autosave-field";
 type ItemFieldSpec = {
   key: string;
   label: string;
-  type: "text" | "textarea" | "lines" | "select" | "font";
+  type: "text" | "textarea" | "lines" | "select" | "font" | "number";
   placeholder?: string;
 };
 
@@ -96,7 +96,7 @@ const CONFIGS: SectionConfig[] = [
       { key: "author", label: "Autor", type: "text" },
       { key: "role", label: "Rol", type: "text", placeholder: "Costurera" },
       { key: "quote", label: "Cita", type: "textarea" },
-      { key: "rating", label: "Estrellas (1-5)", type: "text", placeholder: "5" },
+      { key: "rating", label: "Estrellas (1-5)", type: "number", placeholder: "5" },
     ],
     fieldGroups: [
       { label: "Titular y cintillo", fields: ["@base", "eyebrow"] },
@@ -182,45 +182,69 @@ const SECTION_ANCHORS: Partial<Record<LandingSection, string>> = {
   cta: "comprar",
 };
 
+const DEVICES = [
+  { value: "desktop", label: "Escritorio" },
+  { value: "tablet", label: "Tablet" },
+  { value: "mobile", label: "Móvil" },
+] as const;
+
+const DEVICE_WIDTHS: Record<"desktop" | "tablet" | "mobile", string> = {
+  desktop: "100%",
+  tablet: "768px",
+  mobile: "390px",
+};
+
 const baseInput =
   "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
 
 function ItemsEditor({
+  sectionId,
   spec,
-  initialItems,
+  items,
   onChange,
   onSave,
   emptyMessage,
 }: {
+  /** Sección del CRM: da un `id` estable a cada campo para el enfoque en línea. */
+  sectionId: string;
   spec: ItemFieldSpec[];
-  initialItems: Array<Record<string, string>>;
+  items: Array<Record<string, string>>;
   onChange: (items: Array<Record<string, string>>) => void;
   onSave: (items: Array<Record<string, string>>) => void;
   emptyMessage: string;
 }) {
-  const [items, setItems] = useState<Array<Record<string, string>>>(initialItems);
-
-  const update = (next: Array<Record<string, string>>) => {
-    setItems(next);
-    onChange(next);
-  };
-
   const patch = (i: number, key: string, value: string) => {
     const next = items.map((item, idx) => (idx === i ? { ...item, [key]: value } : item));
-    update(next);
+    onChange(next);
     return next;
   };
 
   const add = () => {
+    // Solo en local: un ítem en blanco no debe guardarse ni disparar la
+    // validación del servidor. Se persiste al completarlo (blur) o al guardar
+    // cualquier otro cambio de la sección.
     const blank = Object.fromEntries(spec.map((f) => [f.key, ""])) as Record<string, string>;
-    const next = [...items, blank];
-    update(next);
-    onSave(next);
+    onChange([...items, blank]);
   };
 
   const remove = (i: number) => {
     const next = items.filter((_, idx) => idx !== i);
-    update(next);
+    onChange(next);
+    onSave(next);
+  };
+
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= items.length) return;
+    const next = [...items];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+    onSave(next);
+  };
+
+  const duplicate = (i: number) => {
+    const next = [...items.slice(0, i + 1), { ...items[i] }, ...items.slice(i + 1)];
+    onChange(next);
     onSave(next);
   };
 
@@ -229,11 +253,12 @@ function ItemsEditor({
       {items.map((item, i) => (
         <div key={i} className="space-y-3 rounded-md border border-border bg-background p-4">
           <div className="grid gap-3">
-            {spec.map((field) =>
-              field.type === "textarea" ? (
-                <label key={field.key} className="space-y-1">
-                  <span className="text-sm font-medium">{field.label}</span>
+            {spec.map((field) => (
+              <label key={field.key} className="space-y-1">
+                <span className="text-sm font-medium">{field.label}</span>
+                {field.type === "textarea" ? (
                   <textarea
+                    id={`sf-item-${sectionId}-${i}-${field.key}`}
                     rows={3}
                     value={item[field.key] ?? ""}
                     placeholder={field.placeholder}
@@ -241,11 +266,21 @@ function ItemsEditor({
                     onBlur={(e) => onSave(patch(i, field.key, e.target.value))}
                     className={baseInput}
                   />
-                </label>
-              ) : (
-                <label key={field.key} className="space-y-1">
-                  <span className="text-sm font-medium">{field.label}</span>
+                ) : field.type === "number" ? (
                   <input
+                    id={`sf-item-${sectionId}-${i}-${field.key}`}
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={item[field.key] ?? ""}
+                    placeholder={field.placeholder}
+                    onChange={(e) => patch(i, field.key, e.target.value)}
+                    onBlur={(e) => onSave(patch(i, field.key, e.target.value))}
+                    className={baseInput}
+                  />
+                ) : (
+                  <input
+                    id={`sf-item-${sectionId}-${i}-${field.key}`}
                     type="text"
                     value={item[field.key] ?? ""}
                     placeholder={field.placeholder}
@@ -253,17 +288,46 @@ function ItemsEditor({
                     onBlur={(e) => onSave(patch(i, field.key, e.target.value))}
                     className={baseInput}
                   />
-                </label>
-              ),
-            )}
+                )}
+              </label>
+            ))}
           </div>
-          <button
-            type="button"
-            onClick={() => remove(i)}
-            className="text-sm text-destructive hover:underline"
-          >
-            Quitar elemento
-          </button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => move(i, -1)}
+                disabled={i === 0}
+                aria-label="Subir elemento"
+                className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={() => move(i, 1)}
+                disabled={i === items.length - 1}
+                aria-label="Bajar elemento"
+                className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                onClick={() => duplicate(i)}
+                className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted"
+              >
+                Duplicar
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              className="text-sm text-destructive hover:underline"
+            >
+              Quitar elemento
+            </button>
+          </div>
         </div>
       ))}
       {items.length === 0 ? (
@@ -284,11 +348,19 @@ function SectionForm({
   step,
   section,
   products,
+  isPublished,
+  onTogglePublished,
+  focusReq,
+  onFocusDone,
   onSaved,
 }: {
   step: Step;
   section: LandingSectionData;
   products: ProductOption[];
+  isPublished: boolean;
+  onTogglePublished: (value: boolean) => void;
+  focusReq: { section: string; group: string | null; elementId: string } | null;
+  onFocusDone: () => void;
   onSaved: () => void;
 }) {
   const config = step.config;
@@ -296,7 +368,6 @@ function SectionForm({
   const initialContent = section.content as Record<string, unknown>;
   const [title, setTitle] = useState(section.title);
   const [subtitle, setSubtitle] = useState(section.subtitle);
-  const [isPublished, setIsPublished] = useState(section.isPublished);
 
   const [extra, setExtra] = useState<Record<string, string>>(() => {
     const out: Record<string, string> = {};
@@ -317,18 +388,35 @@ function SectionForm({
       : [];
   });
 
-  const [openGroup, setOpenGroup] = useState<string | null>(
+  const [manualGroup, setManualGroup] = useState<string | null>(
     config.fieldGroups?.[0]?.label ?? null,
   );
   const [error, setError] = useState<string | null>(null);
 
+  // Grupo abierto: si el preview pidió enfocar un campo de esta sección, gana
+  // ese grupo; el usuario puede abrir/cerrar otro (lo que limpia el pedido).
+  const focusGroup = focusReq && focusReq.section === section.section ? focusReq.group : null;
+  const openGroup = focusGroup ?? manualGroup;
+
   const toggleGroup = (label: string) => {
-    setOpenGroup((current) => (current === label ? null : label));
+    onFocusDone();
+    setManualGroup(openGroup === label ? null : label);
   };
 
   const patchExtra = (key: string, value: string) => {
     setExtra((prev) => ({ ...prev, [key]: value }));
   };
+
+  // Enfoque pedido desde el preview: cuando el grupo ya está abierto (derivado
+  // arriba), enfoca el campo. Solo toca el DOM, no estado.
+  useEffect(() => {
+    if (!focusReq || focusReq.section !== section.section) return;
+    const t = window.setTimeout(() => {
+      document.getElementById(focusReq.elementId)?.focus();
+    }, 350);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusReq]);
 
   const persist = async (
     overrides?: {
@@ -341,7 +429,13 @@ function SectionForm({
   ) => {
     const extraNow = overrides?.extra ?? extra;
     const itemsNow = overrides?.items ?? items;
-    const content: Record<string, unknown> = config.items ? { items: itemsNow } : {};
+    // Los ítems totalmente vacíos no se envían: evita el error de validación al
+    // pulsar "+ Añadir elemento" y no ensucia la BD con filas en blanco.
+    const itemsSpec = config.items;
+    const itemsToSave = itemsSpec
+      ? itemsNow.filter((it) => itemsSpec.some((f) => (it[f.key] ?? "").trim() !== ""))
+      : [];
+    const content: Record<string, unknown> = itemsSpec ? { items: itemsToSave } : {};
     for (const field of config.extraFields ?? []) {
       const raw = extraNow[field.key] ?? "";
       content[field.key] =
@@ -359,6 +453,7 @@ function SectionForm({
       content,
     });
     if (res.ok) {
+      setError(null);
       onSaved();
     } else {
       setError(res.error ?? "No se pudo guardar la sección.");
@@ -371,6 +466,7 @@ function SectionForm({
       <label className="block space-y-1">
         <span className="text-sm font-medium">Título</span>
         <AutosaveField
+          id={`sf-field-${section.section}-title`}
           value={title}
           onChangeText={setTitle}
           onSave={async (v) => {
@@ -384,6 +480,7 @@ function SectionForm({
       <label className="block space-y-1">
         <span className="text-sm font-medium">Subtítulo</span>
         <AutosaveField
+          id={`sf-field-${section.section}-subtitle`}
           as="textarea"
           rows={2}
           value={subtitle}
@@ -407,11 +504,12 @@ function SectionForm({
       if (!config.items) return null;
       return (
         <ItemsEditor
+          sectionId={section.section}
           spec={config.items}
-          initialItems={items}
+          items={items}
           onChange={setItems}
           onSave={(next) => void persist({ items: next })}
-          emptyMessage={`Esta sección no tiene elementos todavía.`}
+          emptyMessage="Esta sección no tiene elementos todavía."
         />
       );
     }
@@ -430,6 +528,7 @@ function SectionForm({
           <label className="block space-y-1">
             <span className="text-sm font-medium">{field.label}</span>
             <AutosaveField
+              id={`sf-field-${section.section}-${field.key}`}
               as="select"
               value={current}
               saveOnChange
@@ -474,6 +573,7 @@ function SectionForm({
           <label className="block space-y-1">
             <span className="text-sm font-medium">{field.label}</span>
             <AutosaveField
+              id={`sf-field-${section.section}-${field.key}`}
               as="select"
               value={current}
               saveOnChange
@@ -524,6 +624,7 @@ function SectionForm({
         <span className="text-sm font-medium">{field.label}</span>
         {field.type === "lines" ? (
           <AutosaveField
+            id={`sf-field-${section.section}-${field.key}`}
             as="textarea"
             rows={5}
             value={extra[field.key] ?? ""}
@@ -537,6 +638,7 @@ function SectionForm({
           />
         ) : (
           <AutosaveField
+            id={`sf-field-${section.section}-${field.key}`}
             value={extra[field.key] ?? ""}
             placeholder={field.placeholder}
             onChangeText={(v) => patchExtra(field.key, v)}
@@ -558,8 +660,6 @@ function SectionForm({
           {error}
         </p>
       ) : null}
-
-      {!config.hideBaseFields && !config.fieldGroups ? renderBaseFields() : null}
 
       {config.extraFields ? (
         config.fieldGroups ? (
@@ -608,22 +708,13 @@ function SectionForm({
         )
       ) : null}
 
-      {config.items && !config.fieldGroups ? (
-        <ItemsEditor
-          spec={config.items}
-          initialItems={items}
-          onChange={setItems}
-          onSave={(next) => void persist({ items: next })}
-          emptyMessage={`Esta sección no tiene elementos todavía.`}
-        />
-      ) : null}
 
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={isPublished}
           onChange={(e) => {
-            setIsPublished(e.target.checked);
+            onTogglePublished(e.target.checked);
             void persist({ isPublished: e.target.checked });
           }}
           className="h-4 w-4 rounded border-input text-primary"
@@ -637,8 +728,22 @@ function SectionForm({
 function LandingWizard({ allSections, products, initialStep }: { allSections: LandingSectionData[]; products: ProductOption[]; initialStep: number }) {
   const router = useRouter();
   const [current, setCurrent] = useState(initialStep);
-  const [reloadKey, setReloadKey] = useState(0);
   const [flash, setFlash] = useState<string | null>(null);
+  const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [interactive, setInteractive] = useState(false);
+  const [pane, setPane] = useState<"edit" | "preview">("edit");
+  // Estado de publicación local por sección: al togglear "publicada" las props
+  // del servidor no se refrescan hasta cambiar de paso, así que el badge leía
+  // un valor viejo. Aquí queda sincronizado de inmediato.
+  const [published, setPublished] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(allSections.map((s) => [s.section, s.isPublished])),
+  );
+  // Pedido de enfoque desde el preview (clic en un campo con `data-sf-edit`).
+  const [focusReq, setFocusReq] = useState<{
+    section: string;
+    group: string | null;
+    elementId: string;
+  } | null>(null);
   const flashTimer = useRef<number | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const step = STEPS[current];
@@ -651,18 +756,17 @@ function LandingWizard({ allSections, products, initialStep }: { allSections: La
   };
   const previewHref =
     step.section === "site" || step.section === "hero" ? "/" : "/que-incluye";
+  const isPublishedNow = published[step.section] ?? section.isPublished;
+
+  // El editor habla con la landing embebida por `postMessage` (origen validado
+  // en el puente). Así no depende de `contentDocument`, que solo funciona con el
+  // preview en el mismo origen.
+  const postToPreview = (message: Record<string, unknown>) => {
+    iframeRef.current?.contentWindow?.postMessage(message, window.location.origin);
+  };
 
   const scrollPreviewTo = (anchor: string) => {
-    const frame = iframeRef.current;
-    const doc = frame?.contentDocument;
-    if (!doc?.documentElement) return;
-    if (anchor) {
-      const el = doc.getElementById(anchor);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
-      doc.documentElement.scrollTop = 0;
-      doc.body.scrollTop = 0;
-    }
+    postToPreview({ type: "sf:scroll", anchor });
   };
 
   const performJump = (i: number) => {
@@ -675,6 +779,33 @@ function LandingWizard({ allSections, products, initialStep }: { allSections: La
   const goTo = (i: number) => {
     if (i < 0 || i >= STEPS.length || i === current) return;
     performJump(i);
+  };
+
+  // Clic en el preview (data-sf-edit): salta a la sección, abre el grupo del
+  // campo y lo enfoca. Formato: "<sección>.<campo>" o
+  // "<sección>.items.<índice>.<campo>".
+  const focusField = (field: string) => {
+    const [sec, seg1, seg2, seg3] = field.split(".");
+    const stepIndex = STEPS.findIndex((s) => s.section === sec);
+    if (stepIndex < 0 || !seg1) return;
+
+    const config = CONFIGS.find((c) => c.section === sec);
+    let group: string | null = null;
+    let elementId = `sf-field-${sec}-${seg1}`;
+    if (seg1 === "items") {
+      elementId = `sf-item-${sec}-${seg2}-${seg3}`;
+      group = config?.fieldGroups?.find((g) => g.fields.includes("@items"))?.label ?? null;
+    } else {
+      group =
+        config?.fieldGroups?.find(
+          (g) =>
+            g.fields.includes(seg1) ||
+            (g.fields.includes("@base") && (seg1 === "title" || seg1 === "subtitle")),
+        )?.label ?? null;
+    }
+
+    if (stepIndex !== current) performJump(stepIndex);
+    setFocusReq({ section: sec, group, elementId });
   };
 
   useEffect(() => {
@@ -691,16 +822,53 @@ function LandingWizard({ allSections, products, initialStep }: { allSections: La
     };
   }, []);
 
+  // Mensajes del puente: "sf:ready" alinea el scroll con la sección editada y
+  // "sf:focus" (clic en el preview) salta al campo correspondiente.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type?: string; field?: string } | null;
+      if (data?.type === "sf:ready") {
+        scrollPreviewTo(SECTION_ANCHORS[step.section] ?? "");
+        return;
+      }
+      if (data?.type === "sf:focus" && typeof data.field === "string") {
+        focusField(data.field);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.section, current]);
+
   const onSaved = () => {
-    setReloadKey((k) => k + 1);
+    // `router.refresh()` en el puente re-renderiza los Server Components sin
+    // recargar el iframe: conserva el scroll y el estado cliente.
+    postToPreview({ type: "sf:refresh" });
     if (flashTimer.current) window.clearTimeout(flashTimer.current);
-    setFlash(`«${LANDING_SECTION_LABELS[step.section]}»: cambios guardados. La vista previa se actualizó.`);
+    setFlash(`«${LANDING_SECTION_LABELS[step.section]}»: cambios guardados.`);
     flashTimer.current = window.setTimeout(() => setFlash(null), 3200);
   };
 
   return (
     <div className="mt-2 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <div className="rounded-lg border border-border bg-card p-6">
+      {/* En pantallas < xl no caben editor y preview a la vez. */}
+      <div className="flex gap-1 rounded-md bg-secondary p-1 text-sm xl:hidden">
+        {(["edit", "preview"] as const).map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => setPane(p)}
+            className={`flex-1 rounded-sm px-3 py-1.5 transition-colors ${
+              pane === p ? "bg-card shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            {p === "edit" ? "Editor" : "Vista previa"}
+          </button>
+        ))}
+      </div>
+
+      <div className={`rounded-lg border border-border bg-card p-6 ${pane === "edit" ? "" : "hidden xl:block"}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="font-display text-xl font-semibold text-foreground">
@@ -710,17 +878,17 @@ function LandingWizard({ allSections, products, initialStep }: { allSections: La
           </div>
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-              section.isPublished
+              isPublishedNow
                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
                 : "bg-muted text-muted-foreground"
             }`}
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                section.isPublished ? "bg-emerald-500" : "bg-muted-foreground"
+                isPublishedNow ? "bg-emerald-500" : "bg-muted-foreground"
               }`}
             />
-            {section.isPublished ? "Publicada" : "Oculta"}
+            {isPublishedNow ? "Publicada" : "Oculta"}
           </span>
         </div>
 
@@ -739,6 +907,12 @@ function LandingWizard({ allSections, products, initialStep }: { allSections: La
             step={step}
             section={section}
             products={products}
+            isPublished={isPublishedNow}
+            onTogglePublished={(value) =>
+              setPublished((prev) => ({ ...prev, [step.section]: value }))
+            }
+            focusReq={focusReq}
+            onFocusDone={() => setFocusReq(null)}
             onSaved={onSaved}
           />
         </div>
@@ -770,8 +944,8 @@ function LandingWizard({ allSections, products, initialStep }: { allSections: La
         </div>
       </div>
 
-      <div className="hidden overflow-hidden rounded-lg border border-border bg-card xl:block">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className={`overflow-hidden rounded-lg border border-border bg-card ${pane === "preview" ? "" : "hidden xl:block"}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
           <span className="text-sm font-medium text-foreground">
             Vista previa
             <span className="ml-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -779,27 +953,64 @@ function LandingWizard({ allSections, products, initialStep }: { allSections: La
               Mostrando · {LANDING_SECTION_LABELS[step.section]}
             </span>
           </span>
-          <a
-            href={previewHref}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-          >
-            Abrir en pestaña ↗
-          </a>
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-1 rounded-md bg-secondary p-0.5 sm:flex">
+              {DEVICES.map((d) => (
+                <button
+                  key={d.value}
+                  type="button"
+                  onClick={() => setDevice(d.value)}
+                  aria-pressed={device === d.value}
+                  className={`rounded px-2 py-1 text-xs transition-colors ${
+                    device === d.value
+                      ? "bg-card shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setInteractive((v) => !v)}
+              aria-pressed={interactive}
+              className="rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              {interactive ? "Bloquear clics" : "Permitir clics"}
+            </button>
+            <a
+              href={previewHref}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+            >
+              Abrir ↗
+            </a>
+          </div>
         </div>
-        <iframe
-          ref={iframeRef}
-          key={`${reloadKey}-${previewHref}`}
-          src={previewHref}
-          title="Vista previa de la landing"
-          className="w-full border-0 bg-white"
-          style={{ height: "calc(100vh - 7.5rem)" }}
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-          onLoad={() =>
-            window.setTimeout(() => scrollPreviewTo(SECTION_ANCHORS[step.section] ?? ""), 150)
-          }
-        />
+
+        <div className="flex justify-center bg-muted">
+          <div className="relative" style={{ width: DEVICE_WIDTHS[device], maxWidth: "100%" }}>
+            <iframe
+              ref={iframeRef}
+              src={previewHref}
+              title="Vista previa de la landing"
+              className="w-full border-0 bg-white"
+              style={{ height: "calc(100vh - 9rem)" }}
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+            />
+            {!interactive ? (
+              <button
+                type="button"
+                onClick={() => setInteractive(true)}
+                aria-label="Activar interacción en la vista previa"
+                title="Vista previa bloqueada para no disparar enlaces de compra. Clic para interactuar."
+                className="absolute inset-0 cursor-pointer bg-transparent"
+              />
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );

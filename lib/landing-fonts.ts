@@ -204,13 +204,8 @@ export const LANDING_FONTS: LandingFont[] = [
 
 const BY_VALUE = new Map(LANDING_FONTS.map((f) => [f.value, f]));
 
-export function isLandingFont(value: string | null | undefined): boolean {
-  return !!value && BY_VALUE.has(value);
-}
-
+/** Devuelve la fuente pedida o `undefined` si el valor está vacío o no existe
+ *  (vacío = "automática": cada tema usa su fuente por defecto). */
 export function getLandingFont(value: string | null | undefined): LandingFont | undefined {
   return value ? BY_VALUE.get(value) : undefined;
 }
-
-/** Valor especial del selector: "según el tema" (cada tema usa su fuente por defecto). */
-export const LANDING_FONT_AUTO = "";

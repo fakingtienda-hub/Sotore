@@ -1,0 +1,2 @@
+CREATE INDEX "orders_status_expires_idx" ON "orders" USING btree ("status","expires_at");--> statement-breakpoint
+CREATE INDEX "products_cover_image_url_idx" ON "products" USING btree ("cover_image_url");

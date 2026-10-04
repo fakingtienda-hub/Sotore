@@ -10,6 +10,10 @@ import { createFileTypeSniff, FileTypeMismatchError } from "@/lib/server/file-sn
 import { mimeFor, storage, StorageError } from "@/lib/server/storage";
 import { serverEnv } from "@/lib/serverEnv";
 
+/* La subida proxied transmite el archivo a storage; con archivos grandes en
+   local/VPS puede exceder el timeout por defecto. */
+export const maxDuration = 60;
+
 const PRODUCT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function sanitizeFileName(name: string, maxLength = 80): string {

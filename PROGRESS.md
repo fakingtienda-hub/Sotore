@@ -3,6 +3,48 @@
 > Usa este archivo para retomar el trabajo exactamente donde quedó.
 > Pregunta de retomas: "¿Qué sigue?" → 1) **verificar en el túnel la organización en carpetas por pack + ZIP "Descargar todo"** (crear carpetas en `/admin/products/[id]/files`, asignar archivos, generar el ZIP, y ver la biblioteca agrupada con el botón "Descargar todo (ZIP)"; desde el 2026-09-20 el ZIP ya se invalida automáticamente al cambiar archivos/carpetas — "Regenerar ZIP" queda solo como opción manual) y 2) la **Fase 8 (Webhook + validación de pagos Wompi)** sigue siendo la única dependencia pendiente del camino de pago (faltan credenciales Wompi).
 
+## Editor de la landing: Fases 0–1 + reordenar/duplicar ítems — 2026-10-04
+
+> Pedido: profesionalizar la edición de la landing desde el CRM. Plan de 6 fases aprobado; hechas la 0 y la 1, más un avance de la 3. Pendientes: 2 (edición visual inline), 3-resto (imágenes en secciones), 4 (borrador/versiones), 5 (errores por campo/a11y) y la decisión sobre `headerBadge`/`headerTag`.
+
+### Fase 0 · Higiene y bugs
+- `lib/landing-fonts.ts`: eliminados `LANDING_FONT_AUTO` e `isLandingFont` (sin uso).
+- `app/admin/landing/landing-editor.tsx`:
+  - `ItemsEditor` ahora es **controlado** (una sola fuente de verdad, se quitó el estado duplicado) y **"+ Añadir elemento" ya no guarda en el acto** → no dispara la validación del servidor.
+  - `persist()` **omite los ítems totalmente vacíos** y **limpia el error** al guardar bien (antes quedaba pegado).
+  - Estado de publicación **elevado a `LandingWizard`** → el badge "Publicada/Oculta" se sincroniza al instante.
+  - `rating` pasa a `type: "number"` (1–5). Eliminadas ramas inalcanzables (`!config.fieldGroups`).
+
+### Fase 1 · Vista previa profesional
+- **Nuevo** `components/storefront/preview-bridge.tsx` (cliente): dentro del iframe del editor escucha `postMessage` del mismo origen; `sf:refresh` → `router.refresh()` (re-render de Server Components **sin recargar la página**: conserva scroll y estado), `sf:scroll` → alinea al ancla, y avisa `sf:ready` al montar. Inerte en la página pública (sin iframe). Montado en `app/(public)/layout.tsx`.
+- `landing-editor.tsx`: la vista previa **ya no se remonta** en cada guardado (se quitó `reloadKey`/`key`); el editor habla por `postMessage` (adiós `contentDocument`). Nuevo **bloqueo de clics** por defecto (overlay) con toggle "Permitir/Bloquear clics" para no disparar el checkout desde el preview, **tamaños** Escritorio/Tablet/Móvil, y **visible en todos los tamaños** (pestañas Editor/Vista previa cuando < xl).
+
+### Fase 3 (avance)
+- `ItemsEditor`: botones **↑ ↓ Duplicar** por elemento (además de "Quitar").
+
+### Verificación
+- `typecheck` ✓ · `lint` ✓ · `build` ✓.
+- **Playwright (navegador real, sesión admin)**: 13/13 — preview presente, overlay por defecto, móvil ~390px, escritorio > móvil, toggle de interacción, **refresh sin remontar / sin recargar documento / conservando scroll**, scroll del puente, y **sin recursos rotos nuevos**. (Se observó un 404 preexistente de una portada de producto, ajeno a este cambio.)
+- Los scripts temporales de verificación se borraron.
+
+## OPTIMIZACIÓN serverless (sin cambios de comportamiento) — 2026-10-03
+
+> Pedido: "optimizar las funciones serverless sin romper nada". Cuatro frentes, todos aditivos.
+- **Config de rutas**: `export const maxDuration = 60` en las pesadas (máximo válido en Hobby y Pro) — `products/[productId]/pack` (genera el ZIP leyendo todos los archivos), `files/[fileId]/thumb` (mupdf/sharp), `cron/reconcile` (barrido + recuperación) y `files/upload` (streaming a storage). NO se añadió `runtime`: edge está deprecado, `nodejs` es el default y la doc de esta versión pide quitarlo.
+- **Cold start / bundle**: `serverExternalPackages` pasa a incluir `archiver`, `@aws-sdk/client-s3`, `@aws-sdk/lib-storage` y `@aws-sdk/s3-request-presigner`. `@aws-sdk/client-s3` y `sharp` ya se excluían por defecto; se listan para dejarlo explícito.
+- **Base de datos**: el cliente `postgres` gana `idle_timeout: 20`, `connect_timeout: 10` y `max_lifetime: 1800` (en serverless la instancia se reutiliza minutos y un cliente ocioso puede apuntar a una conexión que el pooler ya cerró → el fallo "Failed query" del README). Índices nuevos: `products_cover_image_url_idx` (portadas, ruta pública) y `orders_status_expires_idx` sobre `(status, expires_at)` (barrido). Migración `0010_smart_mariko_yashida.sql` — **pendiente de aplicar**: `npm run db:migrate`.
+- **Trabajo repetido**: `expireStalePendingOrders()` con throttle de 30s por instancia (evita el UPDATE en cada sondeo de estado, reintento y webhook) y escape `{ force: true }` para la reconciliación. Para no permitir cobrar una orden vencida, `payment/init` comprueba la orden puntual con `expireOrderIfStale(orderId)` antes de emitir el checkout.
+- **Verificado**: `typecheck` ✓ · `lint` ✓ · `build` ✓ · `verify:order-expiry` (ampliado a 9 aserciones: barrido, throttle, force, expiración puntual) 9/9 ✓ · migración 0010 validada contra el esquema real en una transacción revertida ✓.
+- **Limitación**: no se midió cold start real (no es medible desde local); el efecto de `serverExternalPackages` es reducción de bundle, no una cifra medida.
+
+## FIX: `zod` declarado + la descarga no consume al fallar — 2026-10-03
+
+> Auditoría del proyecto; dos hallazgos corregidos.
+- **`zod` era una dependencia fantasma**: se importaba directo en 6 archivos (`app/api/payment/init/route.ts`, `lib/server/actions/{checkout,coupons,landing,products,settings}.ts`) pero solo resolvía como transitiva de `better-auth`/`drizzle-orm`; un `npm ci` limpio o un bump de esas libs podía romper la build sin aviso. Ahora está declarada en `package.json` (`^4.6.5`) y el lockfile quedó sincronizado.
+- **La descarga registraba el consumo antes de comprobar el storage** (`app/api/files/[fileId]/download/route.ts`): el `INSERT` en `downloads` corría antes de `storage.stat`/`storage.stream`, así que un archivo ausente consumía una descarga del límite pese a que el comentario del propio paso y este PROGRESS decían lo contrario. Ahora el archivo se abre primero (stat + stream) y solo entonces se contabiliza (conteo+inserción atómicos bajo advisory lock). Si el límite está agotado o falla la BD, se destruye el stream ya abierto antes de responder (429/error).
+- **`.env.example`**: quitada `AUTH_COOKIE_NAME` (no la lee ningún módulo); `NEXT_PUBLIC_STORE_NAME` se conserva (sí se usa).
+- **Verificado**: `npm run typecheck` ✓ · `npm run lint` ✓. Prueba E2E de descarga no ejecutada (requiere BD + sesión de comprador).
+
 ## Limpieza: blobs huérfanos en storage + fix Zod "Invalid input: expected string, received null" — 2026-09-20
 
 > Pedido del usuario: "Limpialos" (refiriéndose a los **blobs huérfanos** acumulados por las subidas fallidas de archivos).

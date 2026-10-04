@@ -69,8 +69,7 @@ export async function sendEmail(email: Email): Promise<SendResult> {
 
   console.log(`[email:console] to=${to}`);
   console.log(`[email:console] subject=${subject}`);
-  console.log(`[email:console] ---`);
-  console.log(html);
-  console.log(`[email:console] ---`);
+  console.log(`[email:console] provider=console`);
+  console.log(`[email:console] htmlLength=${html.length}`);
   return { ok: true, provider: "console" };
 }

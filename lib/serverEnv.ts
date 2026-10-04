@@ -55,13 +55,38 @@ const requiredAny = (names: string[]): string => {
 };
 
 function buildServerEnv(): ServerEnv {
+  const isProductionRuntime = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
   const wompiEnvRaw = optional("WOMPI_ENV", "sandbox");
   if (wompiEnvRaw !== "sandbox" && wompiEnvRaw !== "production") {
     throw new Error(`WOMPI_ENV debe ser 'sandbox' o 'production' (recibido: "${wompiEnvRaw}").`);
   }
 
+  const appUrl = optional("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+  const databaseUrl = requiredAny(["POSTGRES_URL", "POSTGRES_PRISMA_URL", "DATABASE_URL"]);
+  const authSecret = requiredAny(["AUTH_SECRET", "BETTER_AUTH_SECRET"]);
+  const wompiPublicKey = optional("NEXT_PUBLIC_WOMPI_PUBLIC_KEY", "");
+  const wompiIntegritySecret = optional("WOMPI_INTEGRITY_SECRET", "");
+  const wompiEventsSecret = optional("WOMPI_EVENTS_SECRET", "");
+
+  if (isProductionRuntime) {
+    const requiredProd = [
+      ["NEXT_PUBLIC_APP_URL", appUrl],
+      ["POSTGRES_URL / POSTGRES_PRISMA_URL / DATABASE_URL", databaseUrl],
+      ["AUTH_SECRET / BETTER_AUTH_SECRET", authSecret],
+      ["NEXT_PUBLIC_WOMPI_PUBLIC_KEY", wompiPublicKey],
+      ["WOMPI_INTEGRITY_SECRET", wompiIntegritySecret],
+      ["WOMPI_EVENTS_SECRET", wompiEventsSecret],
+    ] as const;
+
+    for (const [name, value] of requiredProd) {
+      if (!value) {
+        throw new Error(`Missing required environment variable for production: ${name}`);
+      }
+    }
+  }
+
   return {
-    appUrl: optional("NEXT_PUBLIC_APP_URL", "http://localhost:3000"),
+    appUrl,
 /* En Vercel (serverless) tiene que ir por el pooler en MODO TRANSACCION
      * (puerto 6543), que es lo que publica la integracion como POSTGRES_URL. El
      * modo sesion (puerto 5432, que es lo que trae DATABASE_URL) cierra las
@@ -71,9 +96,9 @@ function buildServerEnv(): ServerEnv {
      * hay que definir DATABASE_URL: sin esa variable el pooler gana y el codigo
      * no depende de un orden de prioridades. Para desarrollo local basta con
      * DATABASE_URL en `.env.local`. */
-    databaseUrl: requiredAny(["POSTGRES_URL", "POSTGRES_PRISMA_URL", "DATABASE_URL"]),
+    databaseUrl,
     databasePoolMax: Number(optional("DATABASE_POOL_MAX", "5")),
-    authSecret: requiredAny(["AUTH_SECRET", "BETTER_AUTH_SECRET"]),
+    authSecret,
     emailProvider: optional("EMAIL_PROVIDER", "console") as ServerEnv["emailProvider"],
     emailApiKey: optional("EMAIL_API_KEY", ""),
     emailFrom: optional("EMAIL_FROM", "Fakingstore <hola@fakingstore.com>"),
@@ -91,9 +116,9 @@ function buildServerEnv(): ServerEnv {
     // quedar en un historialShared ni en un log como una credencial eternal.
     signedUrlTtlSeconds: Number(optional("SIGNED_URL_TTL_SECONDS", "900")),
     wompiEnv: wompiEnvRaw as ServerEnv["wompiEnv"],
-    wompiPublicKey: optional("NEXT_PUBLIC_WOMPI_PUBLIC_KEY", ""),
-    wompiIntegritySecret: optional("WOMPI_INTEGRITY_SECRET", ""),
-    wompiEventsSecret: optional("WOMPI_EVENTS_SECRET", ""),
+    wompiPublicKey,
+    wompiIntegritySecret,
+    wompiEventsSecret,
     wompiApiUrl: optional("WOMPI_API_URL", ""),
     // Secreto que autoriza a `/api/cron/reconcile`. Vacío = reconciliación
     // desactivada (el endpoint responde 503). Genera con: openssl rand -base64 32

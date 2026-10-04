@@ -44,21 +44,36 @@ function SectionHeader({
   eyebrow,
   title,
   subtitle,
+  section,
 }: {
   eyebrow: string;
   title: string;
   subtitle?: string;
+  /** Sección del CRM a la que pertenece: el preview la usa para editar en línea. */
+  section: string;
 }) {
   const words = title.trim().split(/\s+/).filter(Boolean);
   const last = words.length > 1 ? words.pop() : undefined;
   const rest = words.join(" ");
   return (
     <Reveal className="mx-auto max-w-2xl text-center">
-      <span className="sf-eyebrow justify-center">{eyebrow}</span>
-      <h2 className="sf-title mt-4 text-3xl text-[var(--sf-paper)] sm:text-5xl lg:text-6xl">
+      <span className="sf-eyebrow justify-center" data-sf-edit={`${section}.eyebrow`}>
+        {eyebrow}
+      </span>
+      <h2
+        className="sf-title mt-4 text-3xl text-[var(--sf-paper)] sm:text-5xl lg:text-6xl"
+        data-sf-edit={`${section}.title`}
+      >
         {rest} {last ? <span className="sf-title-accent">{last}</span> : null}
       </h2>
-      {subtitle ? <p className="sf-muted mt-5 text-base leading-relaxed sm:text-lg">{subtitle}</p> : null}
+      {subtitle ? (
+        <p
+          className="sf-muted mt-5 text-base leading-relaxed sm:text-lg"
+          data-sf-edit={`${section}.subtitle`}
+        >
+          {subtitle}
+        </p>
+      ) : null}
     </Reveal>
   );
 }
@@ -90,18 +105,24 @@ function HeroSection({
       <div className="sf-wrap grid items-center gap-12 max-sm:gap-6 pt-16 pb-12 max-lg:pt-[88px] lg:min-h-dvh lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16">
         <div>
           <Reveal>
-            <h1 className="sf-title text-[clamp(2.75rem,9vw,6.25rem)] text-[var(--sf-paper)]">
+            <h1
+              className="sf-title text-[clamp(2.75rem,9vw,6.25rem)] text-[var(--sf-paper)]"
+              data-sf-edit="hero.title"
+            >
               <SplitHeadline title={data.title || "Pack de moldes premium"} />
             </h1>
             {data.subtitle ? (
-              <p className="sf-hero-sub mt-7 max-w-xl text-lg leading-relaxed sm:text-xl">
+              <p
+                className="sf-hero-sub mt-7 max-w-xl text-lg leading-relaxed sm:text-xl"
+                data-sf-edit="hero.subtitle"
+              >
                 {data.subtitle}
               </p>
             ) : null}
 
             <div className="mt-6 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
               {isBuyable ? (
-                <Link href={href} className="sf-btn text-lg w-full sm:w-auto">
+                <Link href={href} className="sf-btn text-lg w-full sm:w-auto" data-sf-edit="hero.ctaText">
                   {content.ctaText || "Quiero el pack"}
                 </Link>
               ) : null}
@@ -214,7 +235,7 @@ function BenefitsSection({ data }: { data: LandingSectionData }) {
   return (
     <section id="beneficios" className="relative border-t border-[var(--sf-line)] py-20 md:py-28">
       <div className="sf-wrap">
-        <SectionHeader eyebrow={content.eyebrow || BENEFITS_EYEBROW} title={data.title || "Por qué te va a encantar"} subtitle={data.subtitle} />
+        <SectionHeader section="benefits" eyebrow={content.eyebrow || BENEFITS_EYEBROW} title={data.title || "Por qué te va a encantar"} subtitle={data.subtitle} />
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {content.items.map((item, i) => (
             <Reveal key={item.title} delay={i * 70}>
@@ -223,9 +244,13 @@ function BenefitsSection({ data }: { data: LandingSectionData }) {
                   <span className="sf-num">{String(i + 1).padStart(2, "0")}</span>
                   <span className="h-px flex-1 bg-gradient-to-r from-[var(--sf-thread)] to-transparent" />
                 </div>
-                <h3 className="sf-title mt-5 text-2xl leading-none text-[var(--sf-paper)]">{item.title}</h3>
+                <h3 className="sf-title mt-5 text-2xl leading-none text-[var(--sf-paper)]" data-sf-edit={`benefits.items.${i}.title`}>
+                  {item.title}
+                </h3>
                 {item.description ? (
-                  <p className="sf-muted mt-3 text-sm leading-relaxed">{item.description}</p>
+                  <p className="sf-muted mt-3 text-sm leading-relaxed" data-sf-edit={`benefits.items.${i}.description`}>
+                    {item.description}
+                  </p>
                 ) : null}
               </div>
             </Reveal>
@@ -243,10 +268,10 @@ function ContentSection({ data }: { data: LandingSectionData }) {
   return (
     <section id="contenido" className="relative border-t border-[var(--sf-line)] bg-[var(--sf-ink-2)] py-20 md:py-28">
       <div className="sf-wrap">
-        <SectionHeader eyebrow={content.eyebrow || CONTENT_EYEBROW} title={data.title || "Todo lo que trae"} subtitle={data.subtitle} />
+        <SectionHeader section="content" eyebrow={content.eyebrow || CONTENT_EYEBROW} title={data.title || "Todo lo que trae"} subtitle={data.subtitle} />
         <Reveal className="mt-14 mx-auto max-w-3xl">
           <ol className="sf-card p-0 overflow-hidden">
-            {content.items.map((item) => (
+            {content.items.map((item, i) => (
               <li
                 key={item.title}
                 className="flex gap-4 border-b border-dashed border-[var(--sf-line)] p-5 last:border-b-0"
@@ -255,9 +280,13 @@ function ContentSection({ data }: { data: LandingSectionData }) {
                   ✓
                 </span>
                 <div>
-                  <h3 className="font-semibold text-[var(--sf-paper)]">{item.title}</h3>
+                  <h3 className="font-semibold text-[var(--sf-paper)]" data-sf-edit={`content.items.${i}.title`}>
+                    {item.title}
+                  </h3>
                   {item.description ? (
-                    <p className="sf-muted mt-1 text-sm leading-relaxed">{item.description}</p>
+                    <p className="sf-muted mt-1 text-sm leading-relaxed" data-sf-edit={`content.items.${i}.description`}>
+                      {item.description}
+                    </p>
                   ) : null}
                 </div>
               </li>
@@ -276,7 +305,7 @@ function BonusesSection({ data, site }: { data: LandingSectionData; site: SiteCo
   return (
     <section id="bonos" className="relative border-t border-[var(--sf-line)] py-20 md:py-28">
       <div className="sf-wrap">
-        <SectionHeader eyebrow={content.eyebrow || BONUSES_EYEBROW} title={data.title || "Bonus incluidos"} subtitle={data.subtitle} />
+        <SectionHeader section="bonuses" eyebrow={content.eyebrow || BONUSES_EYEBROW} title={data.title || "Bonus incluidos"} subtitle={data.subtitle} />
         <div className="mt-14 grid gap-5 md:grid-cols-2">
           {content.items.map((item, i) => (
             <Reveal key={item.title} delay={i * 80}>
@@ -284,9 +313,13 @@ function BonusesSection({ data, site }: { data: LandingSectionData; site: SiteCo
                 <span className="inline-block border border-[rgba(22,17,12,0.5)] px-2.5 py-1 font-mono text-[12px] font-bold tracking-[0.2em] text-[var(--sf-tag-ink)]">
                   {site.bonusTag}
                 </span>
-                <h3 className="sf-title mt-5 text-3xl leading-none text-[var(--sf-tag-ink)]">{item.title}</h3>
+                <h3 className="sf-title mt-5 text-3xl leading-none text-[var(--sf-tag-ink)]" data-sf-edit={`bonuses.items.${i}.title`}>
+                  {item.title}
+                </h3>
                 {item.description ? (
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-[rgba(22,17,12,0.92)]">{item.description}</p>
+                  <p className="mt-3 text-sm font-medium leading-relaxed text-[rgba(22,17,12,0.92)]" data-sf-edit={`bonuses.items.${i}.description`}>
+                    {item.description}
+                  </p>
                 ) : null}
               </div>
             </Reveal>
@@ -307,7 +340,7 @@ function TestimonialsSection({ data }: { data: LandingSectionData }) {
   return (
     <section id="testimonios" className="relative border-t border-[var(--sf-line)] bg-[var(--sf-ink-2)] py-20 md:py-28">
       <div className="sf-wrap">
-        <SectionHeader eyebrow={content.eyebrow || TESTIMONIALS_EYEBROW} title={data.title || "Resultados reales"} subtitle={data.subtitle} />
+        <SectionHeader section="testimonials" eyebrow={content.eyebrow || TESTIMONIALS_EYEBROW} title={data.title || "Resultados reales"} subtitle={data.subtitle} />
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {content.items.map((item, i) => {
             const rating = Math.min(5, Math.max(0, item.rating ?? 5));
@@ -320,12 +353,14 @@ function TestimonialsSection({ data }: { data: LandingSectionData }) {
                     ))}
                   </div>
                   <span className="sr-only">{`Calificación: ${rating} de 5 estrellas`}</span>
-                  <blockquote className="mt-4 flex-1 text-[15px] leading-relaxed text-[var(--sf-paper)]">
+                  <blockquote className="mt-4 flex-1 text-[15px] leading-relaxed text-[var(--sf-paper)]" data-sf-edit={`testimonials.items.${i}.quote`}>
                     <span className="sf-thread font-mono text-2xl leading-none">“</span>
                     {item.quote}
                   </blockquote>
                   <figcaption className="mt-5 border-t border-dashed border-[var(--sf-line)] pt-4">
-                    <span className="font-semibold text-[var(--sf-paper)]">{item.author}</span>
+                    <span className="font-semibold text-[var(--sf-paper)]" data-sf-edit={`testimonials.items.${i}.author`}>
+                      {item.author}
+                    </span>
                     {item.role ? <span className="sf-label block mt-1">{item.role}</span> : null}
                   </figcaption>
                 </figure>
@@ -345,15 +380,19 @@ function FaqSection({ data }: { data: LandingSectionData }) {
   return (
     <section id="faq" className="relative border-t border-[var(--sf-line)] py-20 md:py-28">
       <div className="sf-wrap">
-        <SectionHeader eyebrow={content.eyebrow || FAQ_EYEBROW} title={data.title || "Antes de comprar"} subtitle={data.subtitle} />
+        <SectionHeader section="faq" eyebrow={content.eyebrow || FAQ_EYEBROW} title={data.title || "Antes de comprar"} subtitle={data.subtitle} />
         <Reveal className="mt-14 mx-auto max-w-3xl">
           <div className="sf-card p-0 overflow-hidden">
-            {content.items.map((item) => (
+            {content.items.map((item, i) => (
               <details key={item.question} className="sf-faq border-b border-dashed border-[var(--sf-line)] last:border-b-0 px-6">
                 <summary>
-                  <span className="font-semibold text-[var(--sf-paper)]">{item.question}</span>
+                  <span className="font-semibold text-[var(--sf-paper)]" data-sf-edit={`faq.items.${i}.question`}>
+                    {item.question}
+                  </span>
                 </summary>
-                <div className="faq-a text-sm leading-relaxed">{item.answer}</div>
+                <div className="faq-a text-sm leading-relaxed" data-sf-edit={`faq.items.${i}.answer`}>
+                  {item.answer}
+                </div>
               </details>
             ))}
           </div>
@@ -373,12 +412,17 @@ function CtaSection({ data, product, site }: { data: LandingSectionData; product
       <div className="sf-fabric-lg py-24 md:py-36">
         <div className="sf-wrap flex flex-col items-center text-center">
           <Reveal>
-            <span className="sf-eyebrow">{content.eyebrow || CTA_EYEBROW}</span>
-            <h2 className="sf-title mt-5 max-w-3xl text-[clamp(2.6rem,7vw,5.5rem)] text-[var(--sf-paper)]">
+            <span className="sf-eyebrow" data-sf-edit="cta.eyebrow">{content.eyebrow || CTA_EYEBROW}</span>
+            <h2
+              className="sf-title mt-5 max-w-3xl text-[clamp(2.6rem,7vw,5.5rem)] text-[var(--sf-paper)]"
+              data-sf-edit="cta.title"
+            >
               <SplitHeadline title={data.title || "Arranca tu taller hoy mismo"} />
             </h2>
             {data.subtitle ? (
-              <p className="sf-muted mx-auto mt-6 max-w-xl text-lg leading-relaxed">{data.subtitle}</p>
+              <p className="sf-muted mx-auto mt-6 max-w-xl text-lg leading-relaxed" data-sf-edit="cta.subtitle">
+                {data.subtitle}
+              </p>
             ) : null}
 
             <div className="mt-10 flex flex-col items-center gap-5">
@@ -392,7 +436,7 @@ function CtaSection({ data, product, site }: { data: LandingSectionData; product
                 />
               ) : null}
               {isBuyable ? (
-                <Link href={href} className="sf-btn text-lg w-full sm:w-auto">
+                <Link href={href} className="sf-btn text-lg w-full sm:w-auto" data-sf-edit="cta.ctaText">
                   {content.ctaText || "Quiero el pack"} · {formatPrice(product.price, product.currency)}
                 </Link>
               ) : null}
