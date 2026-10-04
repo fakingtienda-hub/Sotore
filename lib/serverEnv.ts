@@ -69,19 +69,37 @@ function buildServerEnv(): ServerEnv {
   const wompiEventsSecret = optional("WOMPI_EVENTS_SECRET", "");
 
   if (isProductionRuntime) {
+    /* Fatales: sin cualquiera de estas la app no puede servir NI UNA página
+       (URL pública, base de datos o secreto de auth) o arrancaría insegura
+       (sesiones forgeables). Mejor fallar aquí que renderizar un 500 confuso. */
     const requiredProd = [
       ["NEXT_PUBLIC_APP_URL", appUrl],
       ["POSTGRES_URL / POSTGRES_PRISMA_URL / DATABASE_URL", databaseUrl],
       ["AUTH_SECRET / BETTER_AUTH_SECRET", authSecret],
-      ["NEXT_PUBLIC_WOMPI_PUBLIC_KEY", wompiPublicKey],
-      ["WOMPI_INTEGRITY_SECRET", wompiIntegritySecret],
-      ["WOMPI_EVENTS_SECRET", wompiEventsSecret],
     ] as const;
 
     for (const [name, value] of requiredProd) {
       if (!value) {
         throw new Error(`Missing required environment variable for production: ${name}`);
       }
+    }
+
+    /* Wompi NO es fatal para que el sitio cargue: `getWompiConfig` ya degrada a
+       `configured:false` y el webhook responde 503 sin secreto. Si se exige
+       aquí, faltar las claves de pago (aún pendientes) tumba la landing y todo
+       el catálogo. Sin ellas se avisa y solo queda deshabilitado el checkout. */
+    const missingWompi = [
+      ["NEXT_PUBLIC_WOMPI_PUBLIC_KEY", wompiPublicKey],
+      ["WOMPI_INTEGRITY_SECRET", wompiIntegritySecret],
+      ["WOMPI_EVENTS_SECRET", wompiEventsSecret],
+    ].filter(([, value]) => !value);
+
+    if (missingWompi.length) {
+      console.warn(
+        `[env] Wompi sin configurar (faltan: ${missingWompi
+          .map(([name]) => name)
+          .join(", ")}). El pago en línea quedará deshabilitado.`,
+      );
     }
   }
 
