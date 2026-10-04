@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { Fragment } from "react";
 
 import { getLandingShowcaseProduct } from "@/lib/server/actions/checkout";
@@ -18,9 +18,9 @@ type SiteConfig = Required<SiteContent>;
 const BENEFITS_EYEBROW = "Beneficios";
 const CONTENT_EYEBROW = "Contenido incluido";
 const BONUSES_EYEBROW = "Bonos de hoy";
-const TESTIMONIALS_EYEBROW = "Quién ya lo probó";
+const TESTIMONIALS_EYEBROW = "QuiÃ©n ya lo probÃ³";
 const FAQ_EYEBROW = "Preguntas frecuentes";
-const CTA_EYEBROW = "Última llamada";
+const CTA_EYEBROW = "Ãšltima llamada";
 
 function SplitHeadline({ title }: { title: string }) {
   const words = title.trim().split(/\s+/).filter(Boolean);
@@ -30,7 +30,7 @@ function SplitHeadline({ title }: { title: string }) {
   const half = Math.ceil(words.length / 2);
   const first = words.slice(0, half).join(" ");
   const second = words.slice(half).join(" ");
-  // Homogéneo: ambas líneas con el mismo relleno y la misma voz tipográfica;
+  // HomogÃ©neo: ambas lÃ­neas con el mismo relleno y la misma voz tipogrÃ¡fica;
   // solo la segunda lleva el color de acento de marca.
   return (
     <>
@@ -49,7 +49,7 @@ function SectionHeader({
   eyebrow: string;
   title: string;
   subtitle?: string;
-  /** Sección del CRM a la que pertenece: el preview la usa para editar en línea. */
+  /** SecciÃ³n del CRM a la que pertenece: el preview la usa para editar en lÃ­nea. */
   section: string;
 }) {
   const words = title.trim().split(/\s+/).filter(Boolean);
@@ -97,8 +97,8 @@ function HeroSection({
     <header
       id="hero"
       className="sf-fabric relative lg:h-dvh"
-      // Sin `overflow-hidden` ni altura mínima forzada en móvil: si el contenido
-      // crece (imagen + precio + textos editables), la página scrollea en vez
+      // Sin `overflow-hidden` ni altura mÃ­nima forzada en mÃ³vil: si el contenido
+      // crece (imagen + precio + textos editables), la pÃ¡gina scrollea en vez
       // de recortar. En desktop, en cambio, el hero mide EXACTO el viewport
       // (`h-dvh`) y el CSS recorta el sobrante: nada de scroll de unos pocos px.
     >
@@ -171,16 +171,16 @@ function HeroSection({
   );
 }
 
-// FUTURO (pendiente de aprobación): mover a la tarjeta "Sitio" del CRM los
-// textos decorativos de la hoja de molde (FK · 001, Est. 2026, "El pack",
-// TALLA ÚNICA · ESCALA 100%, "recortar aquí") para que la landing sea 100%
-// editable. Por ahora quedan como arte fijo del diseño.
+// FUTURO (pendiente de aprobaciÃ³n): mover a la tarjeta "Sitio" del CRM los
+// textos decorativos de la hoja de molde (FK Â· 001, Est. 2026, "El pack",
+// TALLA ÃšNICA Â· ESCALA 100%, "recortar aquÃ­") para que la landing sea 100%
+// editable. Por ahora quedan como arte fijo del diseÃ±o.
 function PatternSheet({ title, chips }: { title: string; chips: string[] }) {
   return (
     <div className="sf-sheet mx-auto aspect-[4/5] max-w-md">
       <div className="relative flex h-full flex-col justify-between p-8">
         <div className="flex items-start justify-between">
-          <span className="sf-label">FK · 001</span>
+          <span className="sf-label">FK Â· 001</span>
           <span className="font-mono text-[10px] font-bold uppercase tracking-[0.3em]">Est. 2026</span>
         </div>
 
@@ -220,8 +220,8 @@ function PatternSheet({ title, chips }: { title: string; chips: string[] }) {
         </div>
 
         <div className="flex items-end justify-between">
-          <span className="font-mono text-[10px] tracking-[0.25em]">TALLA ÚNICA · ESCALA 100%</span>
-          <span className="font-mono text-[10px] tracking-[0.25em]">recortar aquí ✂</span>
+          <span className="font-mono text-[10px] tracking-[0.25em]">TALLA ÃšNICA Â· ESCALA 100%</span>
+          <span className="font-mono text-[10px] tracking-[0.25em]">recortar aquÃ­ âœ‚</span>
         </div>
       </div>
     </div>
@@ -235,7 +235,7 @@ function BenefitsSection({ data }: { data: LandingSectionData }) {
   return (
     <section id="beneficios" className="relative border-t border-[var(--sf-line)] py-20 md:py-28">
       <div className="sf-wrap">
-        <SectionHeader section="benefits" eyebrow={content.eyebrow || BENEFITS_EYEBROW} title={data.title || "Por qué te va a encantar"} subtitle={data.subtitle} />
+        <SectionHeader section="benefits" eyebrow={content.eyebrow || BENEFITS_EYEBROW} title={data.title || "Por quÃ© te va a encantar"} subtitle={data.subtitle} />
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {content.items.map((item, i) => (
             <Reveal key={item.title} delay={i * 70}>
@@ -277,7 +277,7 @@ function ContentSection({ data }: { data: LandingSectionData }) {
                 className="flex gap-4 border-b border-dashed border-[var(--sf-line)] p-5 last:border-b-0"
               >
                 <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--sf-thread)] text-sm font-bold text-[var(--sf-ink-2)]">
-                  ✓
+                  âœ“
                 </span>
                 <div>
                   <h3 className="font-semibold text-[var(--sf-paper)]" data-sf-edit={`content.items.${i}.title`}>
@@ -349,12 +349,12 @@ function TestimonialsSection({ data }: { data: LandingSectionData }) {
                 <figure className="sf-card flex h-full flex-col">
                   <div className="flex gap-1 text-[var(--sf-gold)]" aria-hidden="true">
                     {Array.from({ length: rating }).map((_, s) => (
-                      <span key={s}>★</span>
+                      <span key={s}>â˜…</span>
                     ))}
                   </div>
-                  <span className="sr-only">{`Calificación: ${rating} de 5 estrellas`}</span>
+                  <span className="sr-only">{`CalificaciÃ³n: ${rating} de 5 estrellas`}</span>
                   <blockquote className="mt-4 flex-1 text-[15px] leading-relaxed text-[var(--sf-paper)]" data-sf-edit={`testimonials.items.${i}.quote`}>
-                    <span className="sf-thread font-mono text-2xl leading-none">“</span>
+                    <span className="sf-thread font-mono text-2xl leading-none">â€œ</span>
                     {item.quote}
                   </blockquote>
                   <figcaption className="mt-5 border-t border-dashed border-[var(--sf-line)] pt-4">
@@ -437,7 +437,7 @@ function CtaSection({ data, product, site }: { data: LandingSectionData; product
               ) : null}
               {isBuyable ? (
                 <Link href={href} className="sf-btn text-lg w-full sm:w-auto" data-sf-edit="cta.ctaText">
-                  {content.ctaText || "Quiero el pack"} · {formatPrice(product.price, product.currency)}
+                  {content.ctaText || "Quiero el pack"} Â· {formatPrice(product.price, product.currency)}
                 </Link>
               ) : null}
               <p className="sf-label">{site.ctaFootnote}</p>
@@ -485,6 +485,12 @@ export async function LandingSections({
 
   const published = data.filter((s) => s.isPublished && s.section !== "site");
   const detailSections = published.filter((s) => s.section !== "hero");
+  const contentSection = published.find((s) => s.section === "content");
+  const hasWhatIncludes = Boolean(
+    contentSection?.isPublished &&
+      Array.isArray((contentSection.content as any)?.items) &&
+      (contentSection.content as any).items.length > 0
+  );
   const hasDetails = detailSections.length > 0;
 
   if (mode === "hero") {
@@ -502,7 +508,7 @@ export async function LandingSections({
           }
           product={product}
           site={site}
-          secondaryHref={hasDetails ? DETAIL_HREF : null}
+          secondaryHref={hasWhatIncludes ? DETAIL_HREF : null}
         />
       </main>
     );
@@ -546,3 +552,4 @@ export async function LandingSections({
     </>
   );
 }
+
