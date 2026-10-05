@@ -24,13 +24,15 @@ export function LandingDetailsScroll({
 
     const update = () => {
       const enabled = !mqlReduced.matches && mqlDesktop.matches;
-      sections.forEach((el) => {
+      sections.forEach((el, i) => {
         if (enabled) {
-          el.classList.add("lg:sticky", "lg:top-0", "lg:z-10");
+          el.classList.add("lg:sticky", "lg:top-0");
           el.classList.remove("lg:relative");
+          el.style.zIndex = String(5 + i);
         } else {
-          el.classList.remove("lg:sticky", "lg:top-0", "lg:z-10");
+          el.classList.remove("lg:sticky", "lg:top-0");
           el.classList.add("lg:relative");
+          el.style.removeProperty("z-index");
         }
         el.style.removeProperty("transform");
         el.style.removeProperty("will-change");
@@ -56,7 +58,7 @@ export function LandingDetailsScroll({
           if (height <= 0) return;
 
           const progress = Math.max(0, Math.min(1, (-top) / (height + vh * 0.15)));
-          const parallax = progress * 10;
+          const parallax = progress * 8;
           el.style.transform = `translate3d(0, ${-parallax}px, 0)`;
           el.style.willChange = progress > 0 && progress < 1 ? "transform" : "auto";
           el.style.backfaceVisibility = "hidden";
@@ -78,8 +80,7 @@ export function LandingDetailsScroll({
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
       mqlReduced.removeEventListener("change", update);
-      mqlDesktop.addEventListener("change", update);
-      mqlReduced.removeEventListener("change", update);
+      mqlDesktop.removeEventListener("change", update);
     };
   }, []);
 
@@ -87,12 +88,19 @@ export function LandingDetailsScroll({
 
   return (
     <div ref={rootRef} className="relative">
-      <div data-sf-pin-section className="relative lg:h-dvh lg:overflow-hidden">
+      <div
+        data-sf-pin-section
+        className="relative lg:h-dvh lg:overflow-hidden lg:bg-[var(--sf-ink-2)]"
+      >
         {content}
       </div>
 
       {stackNodes.map((node, i) => (
-        <div key={i} data-sf-pin-section className="relative lg:h-auto">
+        <div
+          key={i}
+          data-sf-pin-section
+          className="relative lg:h-auto lg:bg-[var(--sf-ink)]"
+        >
           {node}
         </div>
       ))}
