@@ -7,6 +7,7 @@ import { Reveal } from "@/components/storefront/reveal";
 import { Ticker } from "@/components/storefront/ticker";
 import { PriceTicket } from "@/components/storefront/price-ticket";
 import { HeroPriceCrop } from "@/components/landing/hero-price-crop";
+import { LandingDetailsScroll } from "@/components/landing/landing-details-scroll";
 import {
   SITE_DEFAULTS,
   type LandingSectionData,
@@ -514,16 +515,29 @@ export async function LandingSections({
     );
   }
 
+  const contentSectionData = detailSections.find((s) => s.section === "content");
+  const stackSections = detailSections.filter((s) => s.section !== "content");
+
+  const contentNode = contentSectionData
+    ? renderers[contentSectionData.section]?.(contentSectionData)
+    : null;
+
+  const stackNode = (
+    <>
+      {stackSections.map((section) => (
+        <Fragment key={section.section}>
+          {section.section === "cta" ? <Ticker items={site.tickerItems} /> : null}
+          {renderers[section.section]?.(section)}
+        </Fragment>
+      ))}
+    </>
+  );
+
   return (
     <>
       <main className="relative">
         {hasDetails ? <Ticker items={site.tickerItems} /> : null}
-        {detailSections.map((section) => (
-          <Fragment key={section.section}>
-            {section.section === "cta" ? <Ticker items={site.tickerItems} /> : null}
-            {renderers[section.section]?.(section)}
-          </Fragment>
-        ))}
+        <LandingDetailsScroll content={contentNode} stack={stackNode} />
       </main>
 
       {product && product.status === "published" ? (
