@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const product = await getPublishedProductBySlug(slug);
-  if (!product) return { title: "Checkout · Fakingstore" };
+  if (!product) return { title: "Finalizar compra · Fakingstore" };
   return { title: `Comprar ${product.title} · Fakingstore` };
 }
 
