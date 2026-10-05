@@ -26,11 +26,11 @@ export function LandingDetailsScroll({
       const enabled = !mqlReduced.matches && mqlDesktop.matches;
       sections.forEach((el, i) => {
         if (enabled) {
-          el.classList.add("lg:sticky", "lg:top-0");
+          el.classList.add("lg:sticky", "lg:top-0", "lg:snap-start");
           el.classList.remove("lg:relative");
           el.style.zIndex = String(5 + i);
         } else {
-          el.classList.remove("lg:sticky", "lg:top-0");
+          el.classList.remove("lg:sticky", "lg:top-0", "lg:snap-start");
           el.classList.add("lg:relative");
           el.style.removeProperty("z-index");
         }
@@ -71,14 +71,44 @@ export function LandingDetailsScroll({
       raf = requestAnimationFrame(onScroll);
     };
 
+    // Tecla flecha: salto completo a siguiente/anterior sección
+    const onKeyDown = (e: KeyboardEvent) => {
+      const enabled = !mqlReduced.matches && mqlDesktop.matches;
+      if (!enabled) return;
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      if (e.repeat) return;
+
+      const vh = window.innerHeight;
+      const currentIndex = sections.findIndex((el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.top <= vh * 0.1 && rect.bottom > vh * 0.1;
+      });
+
+      if (currentIndex < 0) return;
+
+      let targetIndex = currentIndex;
+      if (e.key === "ArrowDown") {
+        targetIndex = Math.min(sections.length - 1, currentIndex + 1);
+      } else {
+        targetIndex = Math.max(0, currentIndex - 1);
+      }
+
+      if (targetIndex === currentIndex) return;
+
+      e.preventDefault();
+      sections[targetIndex].scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize);
+    window.addEventListener("keydown", onKeyDown);
     onScroll();
 
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("keydown", onKeyDown);
       mqlReduced.removeEventListener("change", update);
       mqlDesktop.removeEventListener("change", update);
     };
@@ -87,10 +117,10 @@ export function LandingDetailsScroll({
   const stackNodes = Array.isArray(stack) ? stack : [stack];
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative scroll-smooth lg:snap-y lg:snap-mandatory">
       <div
         data-sf-pin-section
-        className="relative lg:h-dvh lg:overflow-hidden lg:bg-[var(--sf-ink-2)]"
+        className="relative lg:h-dvh lg:overflow-hidden lg:bg-[var(--sf-ink-2)] lg:snap-start"
       >
         {content}
       </div>
@@ -99,7 +129,7 @@ export function LandingDetailsScroll({
         <div
           key={i}
           data-sf-pin-section
-          className="relative lg:h-auto lg:bg-[var(--sf-ink)]"
+          className="relative lg:h-auto lg:min-h-dvh lg:bg-[var(--sf-ink)] lg:snap-start"
         >
           {node}
         </div>
