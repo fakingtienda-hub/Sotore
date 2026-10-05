@@ -1,22 +1,22 @@
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   STOREFRONT â€” diseÃ±o de la tienda (landing + proceso de compra).
+﻿/* Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+   STOREFRONT Ã¢â‚¬â€ diseÃƒÂ±o de la tienda (landing + proceso de compra).
    Todo el CSS vive bajo el scope `.storefront` para NO afectar las rutas del
    CRM / admin, que siguen usando el tema por defecto de globals.css.
 
    Regla de cascada: TODO este bloque va dentro de `@layer components` para
    que las utilidades de Tailwind (que viven en `@layer utilities`, posterior)
    puedan sobrescribir correctamente. Antes las reglas estaban sin capa y
-   ganaban SIEMPRE a las utilidades (p. ej. `p-0` sobre `.sf-card` era inÃºtil).
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ganaban SIEMPRE a las utilidades (p. ej. `p-0` sobre `.sf-card` era inÃƒÂºtil).
+   Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 @layer components {
 
 .storefront {
-  /* â”€â”€ Tema CLARO profesional â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Tema CLARO profesional Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
      Fondo gris tirando a blanco, superficies blancas y texto oscuro.
-     La textura (cuadrÃ­cula de pespunte) se mantiene: se dibuja con el color
-     del texto al 7%, o sea una retÃ­cula gris muy sutil sobre el fondo.      */
-  --sf-ink: #f3f4f6; /* fondo de pÃ¡gina */
+     La textura (cuadrÃƒÂ­cula de pespunte) se mantiene: se dibuja con el color
+     del texto al 7%, o sea una retÃƒÂ­cula gris muy sutil sobre el fondo.      */
+  --sf-ink: #f3f4f6; /* fondo de pÃƒÂ¡gina */
   --sf-ink-2: #ffffff; /* superficie de tarjetas */
   --sf-ink-3: #eceef1; /* inserciones, inputs, franjas */
   --sf-paper: #191b1f; /* texto principal */
@@ -32,7 +32,7 @@
   --sf-online: rgba(25, 27, 31, 0.18);
   --sf-muted: rgba(25, 27, 31, 0.72);
 
-  /* Superficie de etiquetas (ticket de precio, hoja de patrÃ³n): clara con
+  /* Superficie de etiquetas (ticket de precio, hoja de patrÃƒÂ³n): clara con
      texto oscuro, igual que antes del cambio de tema. */
   --sf-tag: #ffffff;
   --sf-tag-ink: #191b1f;
@@ -59,15 +59,15 @@
     color: #fff;
   }
 
-/* â”€â”€ CONTENIDO: aplicar SOLO al shell de la landing (y heredado). Cuando un
+/* Ã¢â€â‚¬Ã¢â€â‚¬ CONTENIDO: aplicar SOLO al shell de la landing (y heredado). Cuando un
    producto lleva `theme=premium`, la portada del destacado es oscura con
    acento dorado. La ficha/checkout de un producto premium hereda estos tokens
-   (estÃ¡ intencionalmente SIN bloque anidado por ahora). -------------------- */
+   (estÃƒÂ¡ intencionalmente SIN bloque anidado por ahora). -------------------- */
 
 .storefront[data-sf-theme="premium"] {
   color-scheme: dark;
 
-  /* Paleta oscura premium: grafito profundo + hueso cÃ¡lido + oro. */
+  /* Paleta oscura premium: grafito profundo + hueso cÃƒÂ¡lido + oro. */
   --sf-ink: #0a0d13;
   --sf-ink-2: #121722;
   --sf-ink-3: #1b222e;
@@ -88,16 +88,16 @@
   --sf-tag: #f5f1e8;
   --sf-tag-ink: #151a22;
 
-  /* Color de marca (verde neÃ³n del logo) para acentos del titular. */
+  /* Color de marca (verde neÃƒÂ³n del logo) para acentos del titular. */
   --sf-brand: #18ff00;
 
-  /* TipografÃ­a por defecto del tema: titulares display, pesados e impactantes.
+  /* TipografÃƒÂ­a por defecto del tema: titulares display, pesados e impactantes.
      El CRM puede sobreescribirla por fuente elegida (variables inline). */
   --sf-title-font: var(--font-archivo-black), "Archivo Black", "Arial Black", sans-serif;
   --sf-title-weight: 400;
   --sf-title-tracking: -0.015em;
 
-  /* Textura: retÃ­cula de puntos fina (trazabilidad digital), sin costura. */
+  /* Textura: retÃƒÂ­cula de puntos fina (trazabilidad digital), sin costura. */
   --sf-fabric-pattern:
     radial-gradient(circle at 50% 50%, rgba(239, 238, 233, 0.045) 1px, transparent 1.6px);
   --sf-fabric-size: 22px 22px;
@@ -110,16 +110,16 @@
     color: var(--sf-tag-ink);
   }
 
-/* â”€â”€ Tratamiento premium: mÃ¡s que un repintado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   La paleta oscura por sÃ­ sola se parece a los temas textiles, asÃ­ que el
-   tema premium aÃ±ade SEÃ‘AS VISUALES PROPIAS: tipografÃ­a display pesada e
-   impactante, botÃ³n de compra verde de marca, marco del hero con brillo,
-   ticket neÃ³n y un resplandor cÃ¡lido en el fondo. Los botones secundarios
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Tratamiento premium: mÃƒÂ¡s que un repintado Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+   La paleta oscura por sÃƒÂ­ sola se parece a los temas textiles, asÃƒÂ­ que el
+   tema premium aÃƒÂ±ade SEÃƒâ€˜AS VISUALES PROPIAS: tipografÃƒÂ­a display pesada e
+   impactante, botÃƒÂ³n de compra verde de marca, marco del hero con brillo,
+   ticket neÃƒÂ³n y un resplandor cÃƒÂ¡lido en el fondo. Los botones secundarios
    (ghost/ink/paper) conservan su estilo. */
 .storefront[data-sf-theme="premium"] {
-  /* Fondo de la landing un poco mÃ¡s oscuro que `--sf-ink` (#0a0d13 â†’ #06080b).
-     Se sobreescribe aquÃ­ (solo en premium) para no tocar el token `--sf-ink`,
-     que tambiÃ©n usa la barra de compra. */
+  /* Fondo de la landing un poco mÃƒÂ¡s oscuro que `--sf-ink` (#0a0d13 Ã¢â€ â€™ #06080b).
+     Se sobreescribe aquÃƒÂ­ (solo en premium) para no tocar el token `--sf-ink`,
+     que tambiÃƒÂ©n usa la barra de compra. */
   background-color: #06080b;
   background-image:
     radial-gradient(1100px 520px at 80% -8%, rgba(228, 166, 60, 0.11), transparent 62%),
@@ -146,9 +146,9 @@
     0 0 44px -6px rgba(24, 255, 0, 0.9);
 }
 
-/* â”€â”€ Ticket de precio como CTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Ticket de precio como CTA Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
    Solo el PRECIO: sin marco, sin fondo, sin kicker ni nota. Recto (sin
-   inclinaciÃ³n), mÃ¡s grande y con REFLEJO en el piso (`-webkit-box-reflect`),
+   inclinaciÃƒÂ³n), mÃƒÂ¡s grande y con REFLEJO en el piso (`-webkit-box-reflect`),
    que es lo que le da el "apoyo". El resto se oculta por CSS (los otros temas
    conservan su ticket completo). */
 
@@ -184,24 +184,24 @@
   line-height: 0.95;
   letter-spacing: -0.01em;
   color: #ffffff;
-  /* Sombra SÃ“LIDA (dura, sin difuminar) proyectada hacia abajo, sutil y
-     proporcional al tamaÃ±o del texto (`em`), para que "apoye" en la base. */
+  /* Sombra SÃƒâ€œLIDA (dura, sin difuminar) proyectada hacia abajo, sutil y
+     proporcional al tamaÃƒÂ±o del texto (`em`), para que "apoye" en la base. */
   text-shadow: 0 0.035em 0 rgba(0, 0, 0, 0.55);
 }
 
-/* MÃ³vil vertical: el precio debe medir lo MISMO que en horizontal (68.2px).
+/* MÃƒÂ³vil vertical: el precio debe medir lo MISMO que en horizontal (68.2px).
    En horizontal se ve 8.08vw (=68.2px a 844px). Para igualarlo en vertical
-   se sube el tÃ©rmino fluido: 17.35vw a 393px da 68.19px, y ademÃ¡s crece de
-   forma continua con el ancho (antes el clamp tocaba el mÃ­nimo 3.3rem). */
+   se sube el tÃƒÂ©rmino fluido: 17.35vw a 393px da 68.19px, y ademÃƒÂ¡s crece de
+   forma continua con el ancho (antes el clamp tocaba el mÃƒÂ­nimo 3.3rem). */
 @media (max-width: 639px) {
   .storefront[data-sf-theme="premium"] .sf-ticket .tag-price {
     font-size: clamp(3.3rem, 17.35vw, 5.5rem);
   }
 }
 
-/* Reflejo de la SOMBRA detrÃ¡s del texto: copia espejada, oscura y difuminada
-   del precio (la sombra sÃ³lida vista en el piso), pintada por detrÃ¡s del
-   reflejo blanco del texto (::after, que va despuÃ©s en el orden de pintado). */
+/* Reflejo de la SOMBRA detrÃƒÂ¡s del texto: copia espejada, oscura y difuminada
+   del precio (la sombra sÃƒÂ³lida vista en el piso), pintada por detrÃƒÂ¡s del
+   reflejo blanco del texto (::after, que va despuÃƒÂ©s en el orden de pintado). */
 .storefront[data-sf-theme="premium"] .sf-ticket .tag-price::before {
   content: attr(data-text);
   position: absolute;
@@ -228,9 +228,9 @@
 }
 
 /* Reflejo en el piso: copia espejada del precio que se desvanece hacia abajo.
-   Se hace con ::after + mask-image (estÃ¡ndar, funciona en TODOS los
+   Se hace con ::after + mask-image (estÃƒÂ¡ndar, funciona en TODOS los
    navegadores) en vez de `-webkit-box-reflect`, que recortaba el reflejo.
-   `data-text` lo aporta `price-ticket.tsx`. La mÃ¡scara se aplica en el sistema
+   `data-text` lo aporta `price-ticket.tsx`. La mÃƒÂ¡scara se aplica en el sistema
    local del pseudo-elemento, que va volteado con `scaleY(-1)`: por eso es
    opaca abajo (que tras el volteo queda pegado al precio) y transparente
    arriba (el extremo lejano). */
@@ -272,8 +272,8 @@
   pointer-events: none;
 }
 
-/* â”€â”€ Temas de apariencia por producto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   El tema de la landing (segÃºn el producto destacado) se aplica en el shell
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Temas de apariencia por producto Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+   El tema de la landing (segÃƒÂºn el producto destacado) se aplica en el shell
    `.storefront[data-sf-theme=...]`. Las fichas /store y el checkout pueden
    retintar SU contenido con `.storefront [data-sf-theme=...]` (nested).        */
 
@@ -352,7 +352,7 @@
   scroll-margin-top: 4.5rem;
 }
 
-/* â”€â”€ TipografÃ­a â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ TipografÃƒÂ­a Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 /* La familia/peso/tracking de titulares y elementos display los decide el tema
    (ver `--sf-title-font` por tema) o la fuente elegida en el CRM, que se
@@ -398,8 +398,8 @@
   color: var(--sf-muted);
 }
 
-/* Sello/etiqueta pequeÃ±a en pÃ­ldora (los "sellos de confianza" del hero:
-   âœ“ Pago seguro con Wompi, âœ“ Descarga inmediata, âœ“ Acceso de por vida).
+/* Sello/etiqueta pequeÃƒÂ±a en pÃƒÂ­ldora (los "sellos de confianza" del hero:
+   Ã¢Å“â€œ Pago seguro con Wompi, Ã¢Å“â€œ Descarga inmediata, Ã¢Å“â€œ Acceso de por vida).
    Se coloca junto a los botones de compra, al lado derecho. */
 .sf-chip {
   display: inline-flex;
@@ -418,7 +418,7 @@ color: var(--sf-paper);
   white-space: nowrap;
 }
 
-/* â”€â”€ Botones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Botones Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-btn {
   position: relative;
@@ -495,7 +495,7 @@ color: var(--sf-paper);
   pointer-events: none;
 }
 
-/* â”€â”€ Ticket de precio (etiqueta cosida) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Ticket de precio (etiqueta cosida) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-ticket {
   position: relative;
@@ -553,11 +553,11 @@ color: var(--sf-paper);
   color: rgba(22, 17, 12, 0.68);
 }
 
-/* SOLO mÃ³vil (<1024px): el borde inferior del precio debe quedar al MISMO
+/* SOLO mÃƒÂ³vil (<1024px): el borde inferior del precio debe quedar al MISMO
    nivel que el borde inferior de la imagen del hero. El contenedor del precio
-   se ancla por abajo en mÃ³vil (max-lg:bottom-[30px] en la TSX) y aquÃ­ solo se
+   se ancla por abajo en mÃƒÂ³vil (max-lg:bottom-[30px] en la TSX) y aquÃƒÂ­ solo se
    neutralizan los `transform/translate` globales que lo desplazan, para que el
-   precio quede en su caja natural. Se limita a `#hero` porque en la secciÃ³n
+   precio quede en su caja natural. Se limita a `#hero` porque en la secciÃƒÂ³n
    CTA el precio va centrado y no debe moverse. */
 @media (max-width: 1023px) {
   #hero .sf-ticket {
@@ -566,7 +566,7 @@ color: var(--sf-paper);
   }
 }
 
-/* â”€â”€ Marquee / ticker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Marquee / ticker Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-ticker {
   overflow: hidden;
@@ -602,7 +602,7 @@ color: var(--sf-paper);
 }
 
 .sf-ticker-item::after {
-  content: "âœ³";
+  content: "Ã¢Å“Â³";
   color: var(--sf-thread);
 }
 
@@ -612,7 +612,7 @@ color: var(--sf-paper);
   }
 }
 
-/* â”€â”€ Reveal on scroll â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Reveal on scroll Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-reveal {
   opacity: 0;
@@ -627,7 +627,7 @@ color: var(--sf-paper);
   transform: none;
 }
 
-/* â”€â”€ Hero fabric grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Hero fabric grid Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-fabric {
   background-image: var(--sf-fabric-pattern);
@@ -639,7 +639,7 @@ color: var(--sf-paper);
   background-size: var(--sf-fabric-size-lg);
 }
 
-/* â”€â”€ PatrÃ³n / hoja de moldes (visual) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ PatrÃƒÂ³n / hoja de moldes (visual) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-sheet {
   position: relative;
@@ -666,7 +666,7 @@ color: var(--sf-paper);
 }
 
 .sf-sheet::after {
-  content: "FRANKLIN STORE Â· MOLDE";
+  content: "FRANKLIN STORE Ã‚Â· MOLDE";
   position: absolute;
   left: 50%;
   bottom: 18px;
@@ -681,7 +681,7 @@ color: var(--sf-paper);
 
 
 
-/* â”€â”€ Tarjetas de secciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Tarjetas de secciÃƒÂ³n Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-card {
   position: relative;
@@ -715,7 +715,7 @@ color: var(--sf-paper);
   color: var(--sf-paper-dim);
 }
 
-/* â”€â”€ Bono (patch) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Bono (patch) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-patch {
   position: relative;
@@ -735,7 +735,7 @@ color: var(--sf-paper);
   pointer-events: none;
 }
 
-/* â”€â”€ FAQ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ FAQ Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-faq summary {
   list-style: none;
@@ -769,7 +769,7 @@ color: var(--sf-paper);
   color: var(--sf-muted);
 }
 
-/* â”€â”€ Formulario / inputs (checkout) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Formulario / inputs (checkout) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-checkout-grid {
   display: grid;
@@ -782,7 +782,7 @@ color: var(--sf-paper);
   justify-content: center;
 }
 
-/* El bloque del checkout (tÃ­tulo + recuadros) se centra VERTICALMENTE en la
+/* El bloque del checkout (tÃƒÂ­tulo + recuadros) se centra VERTICALMENTE en la
    pantalla: `margin-block:auto` (no `justify-content:center`) para que, si el
    contenido no cabe, crezca hacia abajo y se pueda scrollear sin recortar. */
 .sf-checkout-shell {
@@ -790,7 +790,7 @@ color: var(--sf-paper);
   margin-block: auto;
 }
 
-/* Aire entre el tÃ­tulo y la fila de recuadros (ambos alineados arriba). */
+/* Aire entre el tÃƒÂ­tulo y la fila de recuadros (ambos alineados arriba). */
 .sf-checkout-head {
   margin-bottom: 1.25rem;
 }
@@ -804,7 +804,7 @@ color: var(--sf-paper);
   }
 
   /* Resumen del pedido pegajoso. En el checkout NO hay header (se oculta),
-     asÃ­ que el despegue es corto. */
+     asÃƒÂ­ que el despegue es corto. */
   .sf-checkout-grid aside {
     position: sticky;
     top: 1.5rem;
@@ -813,8 +813,8 @@ color: var(--sf-paper);
   /* La card del resumen rellena toda la columna (misma altura que el
      formulario) y reparte el contenido: el sello de Wompi queda al fondo.
      Ojo: la regla va sobre `.sf-summary-card` (solo la card de escritorio),
-     porque `.sf-card` a secas tambiÃ©n alcanza la barra plegable de mÃ³vil y,
-     al tener mÃ¡s especificidad, le ganaba a su `lg:hidden`. */
+     porque `.sf-card` a secas tambiÃƒÂ©n alcanza la barra plegable de mÃƒÂ³vil y,
+     al tener mÃƒÂ¡s especificidad, le ganaba a su `lg:hidden`. */
   .sf-checkout-grid aside .sf-summary-card {
     height: 100%;
     display: flex;
@@ -828,13 +828,13 @@ color: var(--sf-paper);
 
 .sf-thumb {
   flex-shrink: 0;
-  width: 3.5rem; /* 56px mÃ³vil */
+  width: 3.5rem; /* 56px mÃƒÂ³vil */
   aspect-ratio: 4 / 5;
   height: auto;
   border-radius: 8px;
   border: 1px solid var(--sf-line-strong);
   /* `contain` (y no `cover`): la portada se ve COMPLETA, sin recortes,
-     sea cuadrada, 4:5 o mÃ¡s alta. El fondo rellena el marco. */
+     sea cuadrada, 4:5 o mÃƒÂ¡s alta. El fondo rellena el marco. */
   object-fit: contain;
   background: var(--sf-ink-3);
 }
@@ -845,12 +845,12 @@ color: var(--sf-paper);
   }
 }
 
-/* Variante chica para la barra del resumen plegable (mÃ³vil). */
+/* Variante chica para la barra del resumen plegable (mÃƒÂ³vil). */
 .sf-thumb-sm {
   width: 2.5rem;
 }
 
-/* Resumen plegable del checkout (mÃ³vil): solo la barra con el total. */
+/* Resumen plegable del checkout (mÃƒÂ³vil): solo la barra con el total. */
 .sf-checkout-toggle > summary {
   list-style: none;
   cursor: pointer;
@@ -866,7 +866,7 @@ color: var(--sf-paper);
 }
 
 .sf-checkout-toggle > summary::after {
-  content: "âŒ„";
+  content: "Ã¢Å’â€ž";
   margin-left: auto;
   font-size: 1.35rem;
   line-height: 1;
@@ -878,8 +878,8 @@ color: var(--sf-paper);
   transform: rotate(180deg);
 }
 
-/* El botÃ³n "Aplicar" del cupÃ³n NO debe heredar el ancho completo que los
-   botones tienen en mÃ³vil: se come el input (regla `.sf-btn { width: 100% }`).
+/* El botÃƒÂ³n "Aplicar" del cupÃƒÂ³n NO debe heredar el ancho completo que los
+   botones tienen en mÃƒÂ³vil: se come el input (regla `.sf-btn { width: 100% }`).
    Y se estira a la altura del input para que quede alineado (no 60 vs 52). */
 .sf-checkout-page .sf-btn-sm {
   width: auto;
@@ -888,13 +888,13 @@ color: var(--sf-paper);
   padding-block: 0;
 }
 
-/* En la fila del cupÃ³n el input no lleva el `margin-top` del resto: asÃ­
-   input y botÃ³n "Aplicar" se estiran a la misma altura (52 = 52). */
+/* En la fila del cupÃƒÂ³n el input no lleva el `margin-top` del resto: asÃƒÂ­
+   input y botÃƒÂ³n "Aplicar" se estiran a la misma altura (52 = 52). */
 .sf-coupon-row .sf-input {
   margin-top: 0;
 }
 
-/* SeparaciÃ³n del formulario (propia, para poder compactarla por alto sin
+/* SeparaciÃƒÂ³n del formulario (propia, para poder compactarla por alto sin
    pelear con la especificidad de las utilidades de Tailwind). */
 .sf-checkout-fields {
   display: flex;
@@ -910,9 +910,9 @@ color: var(--sf-paper);
   }
 }
 
-/* El checkout tambiÃ©n es pantalla completa: se compacta segÃºn el alto
+/* El checkout tambiÃƒÂ©n es pantalla completa: se compacta segÃƒÂºn el alto
    disponible. Nunca se recorta (no hay overflow hidden): si en un viewport
-   extremo no llegara a caber, la pÃ¡gina crece y se puede scrollear. */
+   extremo no llegara a caber, la pÃƒÂ¡gina crece y se puede scrollear. */
 @media (max-height: 820px) {
   .sf-checkout-page {
     padding-block: 1.5rem;
@@ -1006,12 +1006,12 @@ color: var(--sf-paper);
     padding: 0.4rem 0.9rem;
   }
 
-  /* Barra de una sola lÃ­nea: el tÃ­tulo ya se ve en el formulario/encabezado. */
+  /* Barra de una sola lÃƒÂ­nea: el tÃƒÂ­tulo ya se ve en el formulario/encabezado. */
   .sf-bar-title {
     display: none;
   }
 
-  /* En pantallas minÃºsculas el rÃ³tulo de secciÃ³n sobra: cada campo ya tiene
+  /* En pantallas minÃƒÂºsculas el rÃƒÂ³tulo de secciÃƒÂ³n sobra: cada campo ya tiene
      su propia etiqueta y el espacio se necesita para el formulario. */
   .sf-checkout-page .sf-checkout-form h2 {
     display: none;
@@ -1026,7 +1026,7 @@ color: var(--sf-paper);
   color: var(--sf-paper);
   border-radius: 8px;
   padding: 0.8rem 0.9rem;
-  /* 16px evita el zoom automÃ¡tico de iOS al enfocar y agranda el Ã¡rea tÃ¡ctil */
+  /* 16px evita el zoom automÃƒÂ¡tico de iOS al enfocar y agranda el ÃƒÂ¡rea tÃƒÂ¡ctil */
   font-size: 1rem;
   min-height: 48px;
   outline: none;
@@ -1050,7 +1050,7 @@ color: var(--sf-paper);
   color: var(--sf-paper-dim);
 }
 
-/* â”€â”€ Utilidades â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Utilidades Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-muted {
   color: var(--sf-muted);
@@ -1072,10 +1072,10 @@ color: var(--sf-paper);
 }
 
 /* Foto del hero SIN marco. El contenedor solo reserva el espacio (aspect-ratio
-   estable, sin CLS) y la imagen se dibuja por debajo de su tamaÃ±o natural (el
-   usuario pidiÃ³ tres recortes del 5%: el `scale` va por 0.95). El fondo,
+   estable, sin CLS) y la imagen se dibuja por debajo de su tamaÃƒÂ±o natural (el
+   usuario pidiÃƒÂ³ tres recortes del 5%: el `scale` va por 0.95). El fondo,
    el borde y el resplandor del antiguo `.sf-stitch-box` ya no aplican: no hay
-   marco. La imagen se ve COMPLETA (`object-contain`), solo mÃ¡s grande. */
+   marco. La imagen se ve COMPLETA (`object-contain`), solo mÃƒÂ¡s grande. */
 #hero {
   /* La imagen ampliada puede sobresalir del contenedor (el espacio sobrante del
      `object-contain` es transparente): se recorta el sobrante para no crear
@@ -1092,25 +1092,25 @@ color: var(--sf-paper);
   display: block;
   transform: scale(var(--sf-hero-scale));
   transform-origin: center;
-  /* El usuario pidiÃ³ subir la imagen 20px vertical (sin moverla en X).
-     `top` (no margin: el margin negativo colapsarÃ­a contra el contenedor). */
+  /* El usuario pidiÃƒÂ³ subir la imagen 20px vertical (sin moverla en X).
+     `top` (no margin: el margin negativo colapsarÃƒÂ­a contra el contenedor). */
   position: relative;
   top: -20px;
 }
 
-/* MÃ³vil/tablet (<1024px): en vertical la imagen NO sube sus 20px de la base.
-   Si sube, su borde superior queda pegado al botÃ³n "Ver quÃ© incluye" (del
+/* MÃƒÂ³vil/tablet (<1024px): en vertical la imagen NO sube sus 20px de la base.
+   Si sube, su borde superior queda pegado al botÃƒÂ³n "Ver quÃƒÂ© incluye" (del
    bloque de texto que va encima). Se anula para que respete el margen del
-   grid y quede un aire claro entre el botÃ³n y la foto. */
+   grid y quede un aire claro entre el botÃƒÂ³n y la foto. */
 @media (max-width: 1023px) {
   .sf-hero-media > img {
     top: 0;
   }
 }
 
-/* El usuario pidiÃ³ recortes del 5%: en sesiones previas quedÃ³ en 0.95; hoy
-   pidiÃ³ TRES recortes mÃ¡s del 5% PERO solo en la versiÃ³n web (desktop), asÃ­
-   que â‰¥1024px baja a 0.8574 y el mÃ³vil conserva 0.95. */
+/* El usuario pidiÃƒÂ³ recortes del 5%: en sesiones previas quedÃƒÂ³ en 0.95; hoy
+   pidiÃƒÂ³ TRES recortes mÃƒÂ¡s del 5% PERO solo en la versiÃƒÂ³n web (desktop), asÃƒÂ­
+   que Ã¢â€°Â¥1024px baja a 0.8574 y el mÃƒÂ³vil conserva 0.95. */
 @media (min-width: 1024px) {
   .sf-hero-media > img {
     --sf-hero-scale: 0.8574;
@@ -1119,8 +1119,8 @@ color: var(--sf-paper);
 
 /* Efectos CONSERVADOS del experimento "hero v2 / prompt CRO" (2026-09-17): de
    todo el prompt solo se mantienen estos dos, en premium.
-   1) Resplandor/glow detrÃ¡s de la foto (verde de marca).
-   2) AnimaciÃ³n al pasar el ratÃ³n: la imagen se eleva y gira un poco; el
+   1) Resplandor/glow detrÃƒÂ¡s de la foto (verde de marca).
+   2) AnimaciÃƒÂ³n al pasar el ratÃƒÂ³n: la imagen se eleva y gira un poco; el
       `scale(0.95)` base se repite en el hover para no encogerla. */
 .storefront[data-sf-theme="premium"] .sf-hero-media > img {
   filter: drop-shadow(0 0 45px rgba(24, 255, 0, 0.18));
@@ -1131,9 +1131,9 @@ color: var(--sf-paper);
   transform: translateY(-8px) rotate(-1deg) scale(var(--sf-hero-scale));
 }
 
-/* SubtÃ­tulo del hero. El color se define aquÃ­ (no con una utilidad de Tailwind)
-   porque la capa `utilities` gana a `components` y anularÃ­a este override. En
-   premium va en BLANCO PURO (antes `--sf-muted`); los demÃ¡s temas no cambian. */
+/* SubtÃƒÂ­tulo del hero. El color se define aquÃƒÂ­ (no con una utilidad de Tailwind)
+   porque la capa `utilities` gana a `components` y anularÃƒÂ­a este override. En
+   premium va en BLANCO PURO (antes `--sf-muted`); los demÃƒÂ¡s temas no cambian. */
 .sf-hero-sub {
   color: var(--sf-muted);
 }
@@ -1142,10 +1142,10 @@ color: var(--sf-paper);
   color: #ffffff;
 }
 
-/* Pantallas cortas (mÃ³vil, tablet vertical y horizontal): compacta el hero
+/* Pantallas cortas (mÃƒÂ³vil, tablet vertical y horizontal): compacta el hero
    para que SIEMPRE entre sin scroll (pantalla completa). Dos niveles:
-   â‰¤740px de alto (mÃ³vil corto / tablet en horizontal) y â‰¤560px (mÃ³vil en
-   horizontal), donde ademÃ¡s se ocultan las filas de confianza. */
+   Ã¢â€°Â¤740px de alto (mÃƒÂ³vil corto / tablet en horizontal) y Ã¢â€°Â¤560px (mÃƒÂ³vil en
+   horizontal), donde ademÃƒÂ¡s se ocultan las filas de confianza. */
 @media (max-height: 740px) {
   #hero .sf-wrap {
     padding-block: 3rem;
@@ -1184,14 +1184,14 @@ color: var(--sf-paper);
   }
 }
 
-/* MÃ³vil/tablet EN HORIZONTAL (pantalla baja): el hero se pone en DOS COLUMNAS
+/* MÃƒÂ³vil/tablet EN HORIZONTAL (pantalla baja): el hero se pone en DOS COLUMNAS
    para que la foto y el precio queden al lado derecho y no debajo. Antes, a
-   844x390 el hero medÃ­a 944px de alto (la foto 406px ocupaba todo el ancho y
-   el precio caÃ­a al final) y obligaba a hacer scroll.
-   La foto, ademÃ¡s, se limita en alto: su contenedor es `aspect-[4/5]`, o sea
+   844x390 el hero medÃƒÂ­a 944px de alto (la foto 406px ocupaba todo el ancho y
+   el precio caÃƒÂ­a al final) y obligaba a hacer scroll.
+   La foto, ademÃƒÂ¡s, se limita en alto: su contenedor es `aspect-[4/5]`, o sea
    400px de alto para 320px de ancho, que no cabe en 390px de alto; con
    `max-height` la caja se achata y `object-contain` letterboxea la imagen.
-   (El `padding-block` de las media queries de arriba no se toca aquÃ­: lo gana
+   (El `padding-block` de las media queries de arriba no se toca aquÃƒÂ­: lo gana
    la utilidad `pt-16`/`max-lg:pt-[88px]`; el margen del titular ya lo deja
    por debajo del banner fijo de 65px.) */
 @media (orientation: landscape) and (max-height: 560px) {
@@ -1204,8 +1204,8 @@ color: var(--sf-paper);
     max-height: 64vh;
   }
 
-  /* Solo mÃ³vil HORIZONTAL: imagen 5% MÃS pequeÃ±a que antes (1.026 Ã— 0.95 = 0.9747)
-     y con la MISMA separaciÃ³n del banner que el titular: el desplazamiento
+  /* Solo mÃƒÂ³vil HORIZONTAL: imagen 5% MÃƒÂS pequeÃƒÂ±a que antes (1.026 Ãƒâ€” 0.95 = 0.9747)
+     y con la MISMA separaciÃƒÂ³n del banner que el titular: el desplazamiento
      vertical de la base (top -20px) se anula para alinear el borde superior
      de la foto con el margen del texto (top -20px -> 0). */
   #hero .sf-hero-media > img {
@@ -1213,24 +1213,24 @@ color: var(--sf-paper);
     top: 0; /* base: -20px */
   }
 
-  /* La columna de la imagen (2Âª del grid del hero) se pega arriba para que su
+  /* La columna de la imagen (2Ã‚Âª del grid del hero) se pega arriba para que su
      imagen empiece a la misma altura que el titular de la columna de texto. */
   #hero .sf-wrap > div:nth-child(2) {
     margin-top: 0;
   }
 
-  /* Precio 5% MÃS pequeÃ±o aÃºn en horizontal (1.87rem Ã— 0.95 = 1.7765). */
+  /* Precio 5% MÃƒÂS pequeÃƒÂ±o aÃƒÂºn en horizontal (1.87rem Ãƒâ€” 0.95 = 1.7765). */
   #hero .sf-ticket .tag-price {
-    font-size: clamp(2.42rem, 8.08vw, 4.44rem); /* base: 2.2rem Ã— 0.85 Ã— 0.95 */
+    font-size: clamp(2.42rem, 8.08vw, 4.44rem); /* base: 2.2rem Ãƒâ€” 0.85 Ãƒâ€” 0.95 */
   }
 
-  /* Precio premium en horizontal: clamp(3rem,10vw,5.5rem) Ã— 0.85 Ã— 0.95 â†' clamp(2.42rem,8.08vw,4.44rem). */
+  /* Precio premium en horizontal: clamp(3rem,10vw,5.5rem) Ãƒâ€” 0.85 Ãƒâ€” 0.95 Ã¢â€ ' clamp(2.42rem,8.08vw,4.44rem). */
   .storefront[data-sf-theme="premium"] #hero .sf-ticket .tag-price {
     font-size: clamp(2.42rem, 8.08vw, 4.44rem);
   }
 }
 
-/* â”€â”€ Barra de compra fija (mÃ³vil) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Barra de compra fija (mÃƒÂ³vil) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-buybar {
   background: color-mix(in srgb, var(--sf-ink) 88%, transparent);
@@ -1239,14 +1239,14 @@ color: var(--sf-paper);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Cuando la barra de compra estÃ¡ presente (en la pÃ¡gina de detalles
-   Â«/que-incluyeÂ»), el footer gana aire inferior para que su contenido
-   nunca quede detrÃ¡s de la barra. */
+/* Cuando la barra de compra estǟ�� presente (en la pǟ��gina de detalles
+   �'��/que-incluye�'��), el footer gana aire inferior para que su contenido
+   nunca quede detrǟ��s de la barra. */
 .sf-buybar ~ .storefront-footer {
-  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
 }
 
-/* â”€â”€ MÃ³vil / tÃ¡ctil â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ MÃƒÂ³vil / tÃƒÂ¡ctil Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-btn,
 .sf-faq summary,
@@ -1279,7 +1279,7 @@ color: var(--sf-paper);
   }
 }
 
-/* â”€â”€ Accesibilidad â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Accesibilidad Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 @media (prefers-reduced-motion: reduce) {
     .sf-reveal {
@@ -1297,9 +1297,9 @@ color: var(--sf-paper);
     }
   }
 
-/* â”€â”€ Foco visible (teclado) para enlaces, botones y acordeones. Se aplica
-   DESPUÃ‰S de `.sf-btn:focus-visible` (mismo origen en la cascada) para dejar
-   una Ãºnica convenciÃ³n consistente. â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Foco visible (teclado) para enlaces, botones y acordeones. Se aplica
+   DESPUÃƒâ€°S de `.sf-btn:focus-visible` (mismo origen en la cascada) para dejar
+   una ÃƒÂºnica convenciÃƒÂ³n consistente. Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .storefront a:focus-visible,
 .storefront button:focus-visible,
