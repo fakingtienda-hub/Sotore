@@ -47,17 +47,17 @@ export function LandingDetailsScroll({
       const stackEl = stackWrap;
       const contentEl = contentWrap;
 
-      // Parallax ligero: la sección siguiente sube con un pequeño offset
-      // para dar sensación de profundidad. Cubrimos ~92% del recorrido
-      // manteniendo un ligero desplazamiento residual en "Qué incluye".
-      const stackFactor = 0.92;
-      const contentParallax = clamped * 8; // px aproximados
-      const stackY = clamped * stackFactor * -100; // %
+      // Parallax ligero: la sección siguiente sube por encima
+      // con un ligero efecto parallax sobre el contenido fijado
+      const stackFactor = 0.88;
+      const contentParallax = clamped * 6; // px
+      const stackY = -100 * (1 - clamped * stackFactor); // % - empieza en -100% (sobre), acaba cerca de 0%
 
       stackEl.style.transform = `translate3d(0, ${stackY}%, 0)`;
       stackEl.style.willChange = clamped > 0.0001 && clamped < 0.9999 ? "transform" : "auto";
       stackEl.style.backfaceVisibility = "hidden";
       stackEl.style.transformStyle = "preserve-3d";
+      stackEl.style.pointerEvents = clamped >= 0.999 ? "auto" : "auto";
 
       contentEl.style.transform = `translate3d(0, ${-contentParallax}px, 0)`;
       contentEl.style.willChange = clamped > 0.0001 && clamped < 0.9999 ? "transform" : "auto";
@@ -123,18 +123,22 @@ export function LandingDetailsScroll({
 
       {/* Capa que sube por encima: resto de secciones */}
       <div
-        ref={stackWrapRef}
-        className={
-          enabled
-            ? "relative z-10 lg:mt-[-100dvh] [backface-visibility:hidden] [transform-style:preserve-3d] will-change-transform"
-            : "relative"
-        }
+        className={enabled ? "relative z-10 lg:h-[1px] lg:pointer-events-none" : "relative"}
       >
-        {stack}
+        <div
+          ref={stackWrapRef}
+          className={
+            enabled
+              ? "relative z-10 lg:absolute lg:inset-x-0 lg:top-0 lg:translate-y-[-100%] [backface-visibility:hidden] [transform-style:preserve-3d] will-change-transform lg:pointer-events-auto"
+              : "relative"
+          }
+        >
+          {stack}
+        </div>
       </div>
 
       {enabled ? (
-        <div aria-hidden="true" className="pointer-events-none h-[20vh] w-full" />
+        <div aria-hidden="true" className="pointer-events-none h-[25vh] w-full" />
       ) : null}
     </div>
   );
