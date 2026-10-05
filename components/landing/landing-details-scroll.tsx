@@ -7,7 +7,7 @@ export function LandingDetailsScroll({
   stack,
 }: {
   content: React.ReactNode;
-  stack: React.ReactNode;
+  stack: React.ReactNode | React.ReactNode[];
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -49,16 +49,14 @@ export function LandingDetailsScroll({
         if (!enabled) return;
 
         const vh = window.innerHeight;
-        sections.forEach((el, i) => {
+        sections.forEach((el) => {
           const rect = el.getBoundingClientRect();
           const top = rect.top;
           const height = rect.height;
           if (height <= 0) return;
 
-          // Progreso mientras esta sección está "pinneada" (top <= 0)
-          // Progreso 0 = empieza a cubrir, progreso 1 = ha pasado casi todo
-          const progress = Math.max(0, Math.min(1, (-top) / (height + vh * 0.1)));
-          const parallax = progress * 12; // px, muy ligero
+          const progress = Math.max(0, Math.min(1, (-top) / (height + vh * 0.15)));
+          const parallax = progress * 10;
           el.style.transform = `translate3d(0, ${-parallax}px, 0)`;
           el.style.willChange = progress > 0 && progress < 1 ? "transform" : "auto";
           el.style.backfaceVisibility = "hidden";
@@ -80,29 +78,24 @@ export function LandingDetailsScroll({
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
       mqlReduced.removeEventListener("change", update);
-      mqlDesktop.removeEventListener("change", update);
+      mqlDesktop.addEventListener("change", update);
+      mqlReduced.removeEventListener("change", update);
     };
   }, []);
 
+  const stackNodes = Array.isArray(stack) ? stack : [stack];
+
   return (
     <div ref={rootRef} className="relative">
-      {/* Sección fija: Qué incluye */}
       <div data-sf-pin-section className="relative lg:h-dvh lg:overflow-hidden">
         {content}
       </div>
 
-      {/* Secciones siguientes apiladas con sticky */}
-      {Array.isArray(stack)
-        ? stack
-        : [stack].map((node, i) => (
-            <div
-              key={i}
-              data-sf-pin-section
-              className="relative lg:h-auto"
-            >
-              {node}
-            </div>
-          ))}
+      {stackNodes.map((node, i) => (
+        <div key={i} data-sf-pin-section className="relative lg:h-auto">
+          {node}
+        </div>
+      ))}
     </div>
   );
 }
