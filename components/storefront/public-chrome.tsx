@@ -96,7 +96,7 @@ export function PublicFooter({
 
   return (
     <footer className="storefront-footer border-t border-[var(--sf-line)]">
-      <div className="sf-wrap flex flex-col items-center justify-between gap-0.5 py-0.5 text-center sm:flex-row sm:text-left">
+      <div className="sf-wrap flex flex-col items-center justify-between gap-0.5 py-0.5 pt-0.5 pb-0.5 text-center sm:flex-row sm:text-left">
         <span className="sf-label">
           © {new Date().getFullYear()} {storeName}
         </span>
