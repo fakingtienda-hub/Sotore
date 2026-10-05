@@ -234,10 +234,10 @@ function BenefitsSection({ data }: { data: LandingSectionData }) {
   if (content.items.length === 0) return null;
 
   return (
-    <section id="beneficios" className="relative border-t border-[var(--sf-line)] py-12 md:py-16">
+    <section id="beneficios" className="relative py-8 md:py-10">
       <div className="sf-wrap">
         <SectionHeader section="benefits" eyebrow={content.eyebrow || BENEFITS_EYEBROW} title={data.title || "Por qué te va a encantar"} subtitle={data.subtitle} />
-        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 md:mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {content.items.map((item, i) => (
             <Reveal key={item.title} delay={i * 70}>
               <div className="sf-card h-full">
@@ -267,10 +267,10 @@ function ContentSection({ data }: { data: LandingSectionData }) {
   if (content.items.length === 0) return null;
 
   return (
-    <section id="contenido" className="relative border-t border-[var(--sf-line)] bg-[var(--sf-ink-2)] py-12 md:py-16">
+    <section id="contenido" className="relative py-8 md:py-10">
       <div className="sf-wrap">
         <SectionHeader section="content" eyebrow={content.eyebrow || CONTENT_EYEBROW} title={data.title || "Todo lo que trae"} subtitle={data.subtitle} />
-        <Reveal className="mt-14 mx-auto max-w-3xl">
+        <Reveal className="mt-8 md:mt-10 mx-auto max-w-3xl">
           <ol className="sf-card p-0 overflow-hidden">
             {content.items.map((item, i) => (
               <li
@@ -304,10 +304,10 @@ function BonusesSection({ data, site }: { data: LandingSectionData; site: SiteCo
   if (content.items.length === 0) return null;
 
   return (
-    <section id="bonos" className="relative border-t border-[var(--sf-line)] py-12 md:py-16">
+    <section id="bonos" className="relative py-8 md:py-10">
       <div className="sf-wrap">
         <SectionHeader section="bonuses" eyebrow={content.eyebrow || BONUSES_EYEBROW} title={data.title || "Bonus incluidos"} subtitle={data.subtitle} />
-        <div className="mt-14 grid gap-5 md:grid-cols-2">
+        <div className="mt-8 md:mt-10 grid gap-5 md:grid-cols-2">
           {content.items.map((item, i) => (
             <Reveal key={item.title} delay={i * 80}>
               <div className="sf-patch h-full">
@@ -339,10 +339,10 @@ function TestimonialsSection({ data }: { data: LandingSectionData }) {
   if (content.items.length === 0) return null;
 
   return (
-    <section id="testimonios" className="relative border-t border-[var(--sf-line)] bg-[var(--sf-ink-2)] py-12 md:py-16">
+    <section id="testimonios" className="relative py-8 md:py-10">
       <div className="sf-wrap">
         <SectionHeader section="testimonials" eyebrow={content.eyebrow || TESTIMONIALS_EYEBROW} title={data.title || "Resultados reales"} subtitle={data.subtitle} />
-        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 md:mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {content.items.map((item, i) => {
             const rating = Math.min(5, Math.max(0, item.rating ?? 5));
             return (
@@ -379,10 +379,10 @@ function FaqSection({ data }: { data: LandingSectionData }) {
   if (content.items.length === 0) return null;
 
   return (
-    <section id="faq" className="relative border-t border-[var(--sf-line)] py-12 md:py-16">
+    <section id="faq" className="relative py-8 md:py-10">
       <div className="sf-wrap">
         <SectionHeader section="faq" eyebrow={content.eyebrow || FAQ_EYEBROW} title={data.title || "Antes de comprar"} subtitle={data.subtitle} />
-        <Reveal className="mt-14 mx-auto max-w-3xl">
+        <Reveal className="mt-8 md:mt-10 mx-auto max-w-3xl">
           <div className="sf-card p-0 overflow-hidden">
             {content.items.map((item, i) => (
               <details key={item.question} className="sf-faq border-b border-dashed border-[var(--sf-line)] last:border-b-0 px-6">
@@ -409,8 +409,8 @@ function CtaSection({ data, product, site }: { data: LandingSectionData; product
   const isBuyable = product?.status === "published";
 
   return (
-    <section id="comprar" className="relative overflow-hidden border-t border-[var(--sf-line)]">
-      <div className="sf-fabric-lg py-16 md:py-20">
+    <section id="comprar" className="relative overflow-hidden">
+      <div className="sf-fabric-lg py-10 md:py-14">
         <div className="sf-wrap flex flex-col items-center text-center">
           <Reveal>
             <span className="sf-eyebrow" data-sf-edit="cta.eyebrow">{content.eyebrow || CTA_EYEBROW}</span>
@@ -426,7 +426,7 @@ function CtaSection({ data, product, site }: { data: LandingSectionData; product
               </p>
             ) : null}
 
-            <div className="mt-10 flex flex-col items-center gap-5">
+            <div className="mt-8 flex flex-col items-center gap-5">
               {product ? (
                 <PriceTicket
                   kicker={site.ctaPriceKicker}
@@ -494,7 +494,6 @@ export async function LandingSections({
     const items = (s.content as { items?: unknown[] } | undefined)?.items;
     return Array.isArray(items) && items.length > 0;
   });
-  const hasDetails = detailSections.length > 0;
 
   if (mode === "hero") {
     return (
@@ -534,7 +533,6 @@ export async function LandingSections({
   return (
     <>
       <main className="relative">
-        {hasDetails ? <Ticker items={site.tickerItems} /> : null}
         <LandingDetailsScroll content={contentNode} stack={stackNode} />
       </main>
 

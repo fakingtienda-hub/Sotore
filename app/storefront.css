@@ -1246,6 +1246,47 @@ color: var(--sf-paper);
   padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
 }
 
+/* -- /que-incluye: secciones a pantalla completa con paginado (snap) --
+   Cada seccion ocupa el alto disponible bajo el header y el documento
+   engancha de a una seccion (scroll o flechas). El snap se activa solo en
+   escritorio y se apaga mientras hay un desplegable (FAQ) abierto. */
+.sf-snap-section {
+  position: relative;
+  /* Alto del header sticky (h-14 = 56px + borde): deja la seccion justo
+     debajo del header al engancharse. */
+  scroll-margin-top: 57px;
+}
+
+@media (min-width: 1024px) {
+  .sf-snap-section {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: calc(100svh - 57px);
+  }
+}
+
+html.sf-details-snap {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+html.sf-details-snap .sf-snap-section {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Permite descansar en el footer (si no, el snap obliga a volver arriba). */
+html.sf-details-snap .storefront-footer {
+  scroll-snap-align: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.sf-details-snap {
+    scroll-behavior: auto;
+  }
+}
+
 /* Ã¢â€â‚¬Ã¢â€â‚¬ MÃƒÂ³vil / tÃƒÂ¡ctil Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 .sf-btn,

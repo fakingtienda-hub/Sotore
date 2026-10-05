@@ -2,6 +2,17 @@
 
 import { useEffect, useRef } from "react";
 
+/**
+ * Página de detalles (`/que-incluye`): cada sección ocupa el alto del viewport y
+ * el pasaje entre secciones es de a una (snap del documento + flechas).
+ *
+ * Antes esto usaba `position: sticky` + parallax, pero el snap vivía en un div
+ * que no era el contenedor de scroll, así que nunca enganchaba y el parallax
+ * quedaba a medias. Ahora el snap se aplica al documento (`html`), de modo que
+ * scroll y flechas avanzan exactamente una sección.
+ */
+const SNAP_CLASS = "sf-details-snap";
+
 export function LandingDetailsScroll({
   content,
   stack,
@@ -10,75 +21,47 @@ export function LandingDetailsScroll({
   stack: React.ReactNode | React.ReactNode[];
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const stackNodes = Array.isArray(stack) ? stack : [stack];
+  const nodes = [content, ...stackNodes].filter(Boolean);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
 
-    const mqlReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     const mqlDesktop = window.matchMedia("(min-width: 1024px)");
+    const mqlReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    const sections = Array.from(
-      root.querySelectorAll<HTMLElement>("[data-sf-pin-section]")
-    );
+    const sections = () =>
+      Array.from(root.querySelectorAll<HTMLElement>("[data-sf-snap]"));
 
-    const update = () => {
-      const enabled = !mqlReduced.matches && mqlDesktop.matches;
-      sections.forEach((el, i) => {
-        if (enabled) {
-          el.classList.add("lg:sticky", "lg:top-0", "lg:snap-start");
-          el.classList.remove("lg:relative");
-          el.style.zIndex = String(5 + i);
-        } else {
-          el.classList.remove("lg:sticky", "lg:top-0", "lg:snap-start");
-          el.classList.add("lg:relative");
-          el.style.removeProperty("z-index");
-        }
-        el.style.removeProperty("transform");
-        el.style.removeProperty("will-change");
-      });
+    const headerHeight = () => {
+      const header = document.querySelector<HTMLElement>(".storefront > header");
+      return header ? header.offsetHeight : 0;
     };
 
-    update();
-    mqlReduced.addEventListener("change", update);
-    mqlDesktop.addEventListener("change", update);
-
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const enabled = !mqlReduced.matches && mqlDesktop.matches;
-        if (!enabled) return;
-
-        const vh = window.innerHeight;
-        sections.forEach((el) => {
-          const rect = el.getBoundingClientRect();
-          const top = rect.top;
-          const height = rect.height;
-          if (height <= 0) return;
-
-          const progress = Math.max(0, Math.min(1, (-top) / (height + vh * 0.15)));
-          const parallax = progress * 8;
-          el.style.transform = `translate3d(0, ${-parallax}px, 0)`;
-          el.style.willChange = progress > 0 && progress < 1 ? "transform" : "auto";
-          el.style.backfaceVisibility = "hidden";
-        });
-      });
+    // Con un desplegable (FAQ) abierto el snap se apaga para poder leer la
+    // respuesta completa; al cerrarlo, vuelve a paginar.
+    const syncSnap = () => {
+      const openDetails = root.querySelector("details[open]");
+      document.documentElement.classList.toggle(
+        SNAP_CLASS,
+        mqlDesktop.matches && !openDetails,
+      );
     };
 
-    const onResize = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(onScroll);
-    };
+    syncSnap();
+    mqlDesktop.addEventListener("change", syncSnap);
 
-    const getCurrentIndex = () => {
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const details = Array.from(root.querySelectorAll("details"));
+    details.forEach((d) => d.addEventListener("toggle", syncSnap));
+
+    const currentIndex = () => {
+      const target = window.scrollY + headerHeight() + 1;
       let best = 0;
       let bestDist = Number.POSITIVE_INFINITY;
-      sections.forEach((el, i) => {
-        const rect = el.getBoundingClientRect();
-        const elTop = scrollTop + rect.top;
-        const dist = Math.abs(scrollTop - elTop);
+      sections().forEach((el, i) => {
+        const top = el.getBoundingClientRect().top + window.scrollY;
+        const dist = Math.abs(top - target);
         if (dist < bestDist) {
           bestDist = dist;
           best = i;
@@ -87,58 +70,47 @@ export function LandingDetailsScroll({
       return best;
     };
 
-    // Tecla flecha: salto completo a siguiente/anterior sección
+    // Flechas: salto completo a la sección siguiente/anterior.
     const onKeyDown = (e: KeyboardEvent) => {
-      const enabled = !mqlReduced.matches && mqlDesktop.matches;
-      if (!enabled) return;
+      if (!mqlDesktop.matches || mqlReduced.matches) return;
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       if (e.repeat) return;
 
-      const currentIndex = getCurrentIndex();
-      let targetIndex = currentIndex;
-      if (e.key === "ArrowDown") {
-        targetIndex = Math.min(sections.length - 1, currentIndex + 1);
-      } else {
-        targetIndex = Math.max(0, currentIndex - 1);
-      }
+      const els = sections();
+      if (els.length === 0) return;
 
-      if (targetIndex === currentIndex) return;
+      const current = currentIndex();
+      const next =
+        e.key === "ArrowDown"
+          ? Math.min(els.length - 1, current + 1)
+          : Math.max(0, current - 1);
+      if (next === current) return;
 
       e.preventDefault();
-      sections[targetIndex].scrollIntoView({ behavior: "smooth", block: "start" });
+      els[next].scrollIntoView({ behavior: "smooth", block: "start" });
     };
 
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize);
     window.addEventListener("keydown", onKeyDown);
-    onScroll();
 
     return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKeyDown);
-      mqlReduced.removeEventListener("change", update);
-      mqlDesktop.removeEventListener("change", update);
+      mqlDesktop.removeEventListener("change", syncSnap);
+      details.forEach((d) => d.removeEventListener("toggle", syncSnap));
+      document.documentElement.classList.remove(SNAP_CLASS);
     };
   }, []);
 
-  const stackNodes = Array.isArray(stack) ? stack : [stack];
-
   return (
-    <div ref={rootRef} className="relative scroll-smooth lg:snap-y lg:snap-mandatory">
-      <div
-        data-sf-pin-section
-        className="relative lg:h-dvh lg:overflow-hidden lg:bg-[var(--sf-ink-2)] lg:snap-start"
-      >
-        {content}
-      </div>
-
-      {stackNodes.map((node, i) => (
+    <div ref={rootRef}>
+      {nodes.map((node, i) => (
         <div
           key={i}
-          data-sf-pin-section
-          className="relative lg:h-auto lg:min-h-dvh lg:bg-[var(--sf-ink)] lg:snap-start"
+          data-sf-snap
+          className={[
+            "sf-snap-section",
+            i % 2 === 1 ? "bg-[var(--sf-ink-2)]" : "bg-[var(--sf-ink)]",
+            i > 0 ? "border-t border-[var(--sf-line)]" : "",
+          ].join(" ")}
         >
           {node}
         </div>
