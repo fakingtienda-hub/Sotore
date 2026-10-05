@@ -71,6 +71,22 @@ export function LandingDetailsScroll({
       raf = requestAnimationFrame(onScroll);
     };
 
+    const getCurrentIndex = () => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      let best = 0;
+      let bestDist = Number.POSITIVE_INFINITY;
+      sections.forEach((el, i) => {
+        const rect = el.getBoundingClientRect();
+        const elTop = scrollTop + rect.top;
+        const dist = Math.abs(scrollTop - elTop);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = i;
+        }
+      });
+      return best;
+    };
+
     // Tecla flecha: salto completo a siguiente/anterior sección
     const onKeyDown = (e: KeyboardEvent) => {
       const enabled = !mqlReduced.matches && mqlDesktop.matches;
@@ -78,14 +94,7 @@ export function LandingDetailsScroll({
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       if (e.repeat) return;
 
-      const vh = window.innerHeight;
-      const currentIndex = sections.findIndex((el) => {
-        const rect = el.getBoundingClientRect();
-        return rect.top <= vh * 0.1 && rect.bottom > vh * 0.1;
-      });
-
-      if (currentIndex < 0) return;
-
+      const currentIndex = getCurrentIndex();
       let targetIndex = currentIndex;
       if (e.key === "ArrowDown") {
         targetIndex = Math.min(sections.length - 1, currentIndex + 1);
