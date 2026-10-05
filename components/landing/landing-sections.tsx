@@ -522,16 +522,12 @@ export async function LandingSections({
     ? renderers[contentSectionData.section]?.(contentSectionData)
     : null;
 
-  const stackNode = (
-    <>
-      {stackSections.map((section) => (
-        <Fragment key={section.section}>
-          {section.section === "cta" ? <Ticker items={site.tickerItems} /> : null}
-          {renderers[section.section]?.(section)}
-        </Fragment>
-      ))}
-    </>
-  );
+  const stackNode = stackSections.map((section) => (
+    <Fragment key={section.section}>
+      {section.section === "cta" ? <Ticker items={site.tickerItems} /> : null}
+      {renderers[section.section]?.(section)}
+    </Fragment>
+  ));
 
   return (
     <>
