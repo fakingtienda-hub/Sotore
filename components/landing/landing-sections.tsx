@@ -234,7 +234,7 @@ function BenefitsSection({ data }: { data: LandingSectionData }) {
   if (content.items.length === 0) return null;
 
   return (
-    <section id="beneficios" className="relative border-t border-[var(--sf-line)] py-20 md:py-28">
+    <section id="beneficios" className="relative border-t border-[var(--sf-line)] py-12 md:py-16">
       <div className="sf-wrap">
         <SectionHeader section="benefits" eyebrow={content.eyebrow || BENEFITS_EYEBROW} title={data.title || "Por quÃ© te va a encantar"} subtitle={data.subtitle} />
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -267,7 +267,7 @@ function ContentSection({ data }: { data: LandingSectionData }) {
   if (content.items.length === 0) return null;
 
   return (
-    <section id="contenido" className="relative border-t border-[var(--sf-line)] bg-[var(--sf-ink-2)] py-20 md:py-28">
+    <section id="contenido" className="relative border-t border-[var(--sf-line)] bg-[var(--sf-ink-2)] py-12 md:py-16">
       <div className="sf-wrap">
         <SectionHeader section="content" eyebrow={content.eyebrow || CONTENT_EYEBROW} title={data.title || "Todo lo que trae"} subtitle={data.subtitle} />
         <Reveal className="mt-14 mx-auto max-w-3xl">
@@ -304,7 +304,7 @@ function BonusesSection({ data, site }: { data: LandingSectionData; site: SiteCo
   if (content.items.length === 0) return null;
 
   return (
-    <section id="bonos" className="relative border-t border-[var(--sf-line)] py-20 md:py-28">
+    <section id="bonos" className="relative border-t border-[var(--sf-line)] py-12 md:py-16">
       <div className="sf-wrap">
         <SectionHeader section="bonuses" eyebrow={content.eyebrow || BONUSES_EYEBROW} title={data.title || "Bonus incluidos"} subtitle={data.subtitle} />
         <div className="mt-14 grid gap-5 md:grid-cols-2">
@@ -339,7 +339,7 @@ function TestimonialsSection({ data }: { data: LandingSectionData }) {
   if (content.items.length === 0) return null;
 
   return (
-    <section id="testimonios" className="relative border-t border-[var(--sf-line)] bg-[var(--sf-ink-2)] py-20 md:py-28">
+    <section id="testimonios" className="relative border-t border-[var(--sf-line)] bg-[var(--sf-ink-2)] py-12 md:py-16">
       <div className="sf-wrap">
         <SectionHeader section="testimonials" eyebrow={content.eyebrow || TESTIMONIALS_EYEBROW} title={data.title || "Resultados reales"} subtitle={data.subtitle} />
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -379,7 +379,7 @@ function FaqSection({ data }: { data: LandingSectionData }) {
   if (content.items.length === 0) return null;
 
   return (
-    <section id="faq" className="relative border-t border-[var(--sf-line)] py-20 md:py-28">
+    <section id="faq" className="relative border-t border-[var(--sf-line)] py-12 md:py-16">
       <div className="sf-wrap">
         <SectionHeader section="faq" eyebrow={content.eyebrow || FAQ_EYEBROW} title={data.title || "Antes de comprar"} subtitle={data.subtitle} />
         <Reveal className="mt-14 mx-auto max-w-3xl">
@@ -410,7 +410,7 @@ function CtaSection({ data, product, site }: { data: LandingSectionData; product
 
   return (
     <section id="comprar" className="relative overflow-hidden border-t border-[var(--sf-line)]">
-      <div className="sf-fabric-lg py-24 md:py-36">
+      <div className="sf-fabric-lg py-16 md:py-20">
         <div className="sf-wrap flex flex-col items-center text-center">
           <Reveal>
             <span className="sf-eyebrow" data-sf-edit="cta.eyebrow">{content.eyebrow || CTA_EYEBROW}</span>
