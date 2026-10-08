@@ -49,8 +49,8 @@ export function PublicHeader({
         <div className="flex items-center gap-2">
           {site.trustRows.length > 0 ? (
             <ul className="hidden items-center gap-2 md:flex">
-              {site.trustRows.map((t) => (
-                <li key={t} className="sf-chip">
+              {site.trustRows.map((t, i) => (
+                <li key={i} className="sf-chip">
                   <span className="text-[var(--sf-gold)]" aria-hidden="true">
                     ✓
                   </span>
@@ -102,8 +102,8 @@ export function PublicFooter({
         </span>
         {site.footerBadges.length > 0 ? (
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
-            {site.footerBadges.map((b) => (
-              <span key={b} className="sf-label">{b}</span>
+            {site.footerBadges.map((b, i) => (
+              <span key={i} className="sf-label">{b}</span>
             ))}
           </div>
         ) : null}

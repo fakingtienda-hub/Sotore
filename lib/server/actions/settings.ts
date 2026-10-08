@@ -9,6 +9,8 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { decryptSecret, encryptSecret } from "@/lib/server/vault";
 import { WOMPI_SETTINGS_KEY } from "@/lib/server/wompi-settings";
+import { EMAIL_SETTINGS_KEY, loadEmailSettings } from "@/lib/server/email-settings";
+import { sendEmail, wrapEmailLayout } from "@/lib/email/send";
 const SETTINGS_KEY = "general";
 
 export type StoreSettings = {
@@ -202,4 +204,166 @@ export async function saveWompiSettings(input: unknown): Promise<{ ok: boolean; 
 
   revalidatePath("/admin/settings");
   return { ok: true };
+}
+
+const emailSettingsSchema = z.object({
+  provider: z.enum(["console", "resend", "smtp", "mailgun"]),
+  from: z
+    .string()
+    .trim()
+    .max(255)
+    .refine((v) => v === "" || v.includes("@"), "El remitente debe incluir un email."),
+  resendApiKey: z.string().max(512).optional(),
+  mailgunDomain: z.string().trim().max(255).optional(),
+  mailgunApiKey: z.string().max(512).optional(),
+  smtpHost: z.string().trim().max(255).optional(),
+  smtpPort: z.coerce.number().int().min(1).max(65535).optional(),
+  smtpSecure: z.boolean().optional(),
+  smtpUser: z.string().trim().max(255).optional(),
+  smtpPassword: z.string().max(512).optional(),
+});
+
+export type EmailSettingsAdmin = {
+  provider: "console" | "resend" | "smtp" | "mailgun";
+  from: string;
+  mailgunDomain: string;
+  mailgunApiKeySet: boolean;
+  mailgunApiKeyLast4: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string;
+  smtpPasswordSet: boolean;
+  smtpPasswordLast4: string;
+  resendApiKeySet: boolean;
+  resendApiKeyLast4: string;
+  /** El proveedor elegido tiene lo mínimo para enviar. */
+  configured: boolean;
+};
+
+/** Config efectiva para el panel: lee BD con fallback a entorno y NUNCA
+ *  devuelve secretos completos (solo los últimos 4 caracteres). */
+export async function getEmailSettings(): Promise<EmailSettingsAdmin> {
+  await requireAdmin();
+  const effective = await loadEmailSettings();
+  const configured =
+    effective.provider === "smtp"
+      ? !!effective.smtpHost
+      : effective.provider === "resend"
+        ? !!effective.resendApiKey
+        : effective.provider === "mailgun"
+          ? !!(effective.mailgunDomain && effective.mailgunApiKey)
+          : true;
+  return {
+    provider: effective.provider,
+    from: effective.from,
+    mailgunDomain: effective.mailgunDomain,
+    mailgunApiKeySet: !!effective.mailgunApiKey,
+    mailgunApiKeyLast4: effective.mailgunApiKey.slice(-4),
+    smtpHost: effective.smtpHost,
+    smtpPort: effective.smtpPort,
+    smtpSecure: effective.smtpSecure,
+    smtpUser: effective.smtpUser,
+    smtpPasswordSet: !!effective.smtpPassword,
+    smtpPasswordLast4: effective.smtpPassword.slice(-4),
+    resendApiKeySet: !!effective.resendApiKey,
+    resendApiKeyLast4: effective.resendApiKey.slice(-4),
+    configured,
+  };
+}
+
+export async function saveEmailSettings(input: unknown): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+
+  const parsed = emailSettingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((e) => e.message).join("; ") };
+  }
+  const d = parsed.data;
+
+  const [row] = await db
+    .select()
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.key, EMAIL_SETTINGS_KEY))
+    .limit(1);
+  const stored = (row?.value ?? {}) as Record<string, unknown>;
+  const keep = (v: unknown) => (typeof v === "string" ? v : "");
+
+  // Secreto vacío = conservar el guardado (igual que Wompi).
+  const encResend = d.resendApiKey ? encryptSecret(d.resendApiKey) : keep(stored.resendApiKey);
+  const encMailgun = d.mailgunApiKey ? encryptSecret(d.mailgunApiKey) : keep(stored.mailgunApiKey);
+  const encSmtp = d.smtpPassword ? encryptSecret(d.smtpPassword) : keep(stored.smtpPassword);
+
+  const mailgunDomain = d.mailgunDomain ?? "";
+  const smtpHost = d.smtpHost ?? "";
+  const smtpPort = d.smtpPort ?? 587;
+  const smtpUser = d.smtpUser ?? "";
+  const smtpSecure = d.smtpSecure ?? smtpPort === 465;
+
+  // Coherencia por proveedor, evaluando lo que quedará guardado.
+  if (d.provider === "smtp" && !smtpHost.trim()) {
+    return { ok: false, error: "El proveedor SMTP requiere un host (p. ej. smtp.mailgun.org)." };
+  }
+  if (d.provider === "smtp" && smtpUser.trim() && !encSmtp) {
+    return { ok: false, error: "Hay usuario SMTP pero falta la contraseña." };
+  }
+  if (d.provider === "resend" && !encResend) {
+    return { ok: false, error: "El proveedor Resend requiere la API key." };
+  }
+  if (d.provider === "mailgun" && !mailgunDomain.trim()) {
+    return { ok: false, error: "El proveedor Mailgun requiere el dominio verificado." };
+  }
+  if (d.provider === "mailgun" && !encMailgun) {
+    return { ok: false, error: "El proveedor Mailgun requiere la API key." };
+  }
+
+  const value = {
+    provider: d.provider,
+    from: d.from,
+    resendApiKey: encResend,
+    mailgunDomain,
+    mailgunApiKey: encMailgun,
+    smtpHost,
+    smtpPort,
+    smtpSecure,
+    smtpUser,
+    smtpPassword: encSmtp,
+  };
+
+  if (row) {
+    await db
+      .update(schema.storeSettings)
+      .set({ value: value as object, updatedAt: new Date() })
+      .where(eq(schema.storeSettings.id, row.id));
+  } else {
+    await db.insert(schema.storeSettings).values({ key: EMAIL_SETTINGS_KEY, value: value as object });
+  }
+
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
+/** Envía un correo de prueba con la configuración GUARDADA (guarda antes). */
+export async function sendTestEmail(
+  to: string,
+): Promise<{ ok: boolean; error?: string; provider?: string }> {
+  await requireAdmin();
+
+  const parsed = z.string().trim().email().max(255).safeParse(to);
+  if (!parsed.success) return { ok: false, error: "Email de destino inválido." };
+
+  try {
+    const res = await sendEmail({
+      to: parsed.data,
+      subject: "Prueba de configuración de correo",
+      html: wrapEmailLayout(
+        "Prueba de correo",
+        `<p>Si ves este mensaje, el envío de correo está configurado correctamente.</p>
+         <p style="font-size:12px;color:#8a7a63;">Enviado desde Configuración del CRM.</p>`,
+      ),
+    });
+    return { ok: true, provider: res.provider };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo enviar el correo." };
+  }
 }

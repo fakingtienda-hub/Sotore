@@ -34,11 +34,14 @@ export const LANDING_SECTION_LABELS: Record<LandingSection, string> = {
 };
 
 export type Item = {
+  /** Identificador estable generado por el editor (ausente en datos antiguos). */
+  id?: string;
   title: string;
   description?: string;
 };
 
 export type Testimonial = {
+  id?: string;
   author: string;
   role?: string;
   quote: string;
@@ -46,6 +49,7 @@ export type Testimonial = {
 };
 
 export type FaqItem = {
+  id?: string;
   question: string;
   answer: string;
 };

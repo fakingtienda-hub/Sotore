@@ -16,12 +16,16 @@ import {
   type SiteContent,
 } from "@/types/landing";
 
+const itemId = z.string().trim().max(120).optional();
+
 const itemSchema = z.object({
+  id: itemId,
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).optional(),
 });
 
 const testimonialSchema = z.object({
+  id: itemId,
   author: z.string().trim().min(1).max(120),
   role: z.string().trim().max(120).optional(),
   quote: z.string().trim().min(1).max(4000),
@@ -34,6 +38,7 @@ const testimonialSchema = z.object({
 });
 
 const faqSchema = z.object({
+  id: itemId,
   question: z.string().trim().min(1).max(300),
   answer: z.string().trim().min(1).max(8000),
 });
@@ -135,15 +140,22 @@ export async function saveLandingSection(
     .from(schema.landingBlocks)
     .where(eq(schema.landingBlocks.section, sectionKey))
     .limit(1);
+  const prevContent = (existing[0]?.content ?? {}) as Record<string, unknown>;
   const prevFeatured =
-    sectionKey === "site"
-      ? ((existing[0]?.content as Record<string, unknown> | undefined)?.featuredProductSlug as string | undefined)
-      : undefined;
+    sectionKey === "site" ? (prevContent.featuredProductSlug as string | undefined) : undefined;
+
+  // El editor solo envía los campos que gestiona; se conservan los demás (p. ej.
+  // `ctaProductSlug`, que sigue siendo un fallback del producto estelar) para no
+  // borrarlos en silencio al guardar cualquier otro campo de la sección.
+  const mergedContent = {
+    ...prevContent,
+    ...(contentResult.data as Record<string, unknown>),
+  };
 
   const values = {
     title: parsed.data.title,
     subtitle: parsed.data.subtitle,
-    content: contentResult.data as object,
+    content: mergedContent,
     isPublished: parsed.data.isPublished,
     updatedAt: new Date(),
   };

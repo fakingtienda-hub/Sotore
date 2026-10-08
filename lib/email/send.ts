@@ -1,4 +1,6 @@
-import { serverEnv } from "@/lib/serverEnv";
+import nodemailer from "nodemailer";
+
+import { loadEmailSettings, type StoredEmailSettings } from "@/lib/server/email-settings";
 
 type Email = {
   to: string;
@@ -42,29 +44,106 @@ export function wrapEmailLayout(title: string, bodyHtml: string): string {
 `;
 }
 
+/**
+ * Envía vía SMTP (Mailgun u otro relay). Se crea un transporte por envío para
+ * no cachear credenciales obsoletas si el admin cambia la config en caliente.
+ * Puerto 465 = TLS implícito (`secure`); 587/25 usan STARTTLS.
+ */
+async function sendViaSmtp(settings: StoredEmailSettings, email: Email): Promise<SendResult> {
+  if (!settings.smtpHost) {
+    throw new Error("SMTP sin configurar: falta el host (p. ej. smtp.mailgun.org).");
+  }
+  const transporter = nodemailer.createTransport({
+    host: settings.smtpHost,
+    port: settings.smtpPort,
+    secure: settings.smtpSecure,
+    // Sin usuario se asume relay abierto (útil solo en pruebas locales).
+    ...(settings.smtpUser
+      ? { auth: { user: settings.smtpUser, pass: settings.smtpPassword } }
+      : {}),
+    connectionTimeout: 12_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
+    tls: { minVersion: "TLSv1.2" },
+  });
+  try {
+    await transporter.sendMail({
+      from: settings.from,
+      to: email.to,
+      subject: email.subject,
+      html: email.html,
+    });
+  } finally {
+    transporter.close();
+  }
+  return { ok: true, provider: "smtp" };
+}
+
+/**
+ * Envía vía la API HTTP de Mailgun (`POST {base}/v3/{dominio}/messages`):
+ * autenticación Basic `api:{API_KEY}` y `application/x-www-form-urlencoded`.
+ * La base puede sobreponerse con `MAILGUN_API_BASE` (región o pruebas locales).
+ */
+async function sendViaMailgun(
+  settings: StoredEmailSettings,
+  email: Email,
+): Promise<SendResult> {
+  if (!settings.mailgunDomain) {
+    throw new Error("Mailgun sin configurar: falta el dominio verificado.");
+  }
+  if (!settings.mailgunApiKey) {
+    throw new Error("Mailgun sin configurar: falta la API key.");
+  }
+  const base = (settings.mailgunApiBase || "https://api.mailgun.net").replace(/\/$/, "");
+  const params = new URLSearchParams();
+  params.set("from", settings.from);
+  params.set("to", email.to);
+  params.set("subject", email.subject);
+  params.set("html", email.html);
+
+  const res = await fetch(`${base}/v3/${encodeURIComponent(settings.mailgunDomain)}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`api:${settings.mailgunApiKey}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  });
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    throw new Error(`Mailgun API devolvió ${res.status}: ${detail}`);
+  }
+  return { ok: true, provider: "mailgun" };
+}
+
 export async function sendEmail(email: Email): Promise<SendResult> {
   const { to, subject, html } = email;
+  const settings = await loadEmailSettings();
 
-  if (serverEnv.emailProvider === "resend") {
-    if (!serverEnv.emailApiKey) {
-      throw new Error("EMAIL_API_KEY is required when EMAIL_PROVIDER=resend");
+  if (settings.provider === "mailgun") {
+    return sendViaMailgun(settings, { to, subject, html });
+  }
+
+  if (settings.provider === "smtp") {
+    return sendViaSmtp(settings, { to, subject, html });
+  }
+
+  if (settings.provider === "resend") {
+    if (!settings.resendApiKey) {
+      throw new Error("Resend sin configurar: falta la API key (admin o EMAIL_API_KEY).");
     }
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${serverEnv.emailApiKey}`,
+        Authorization: `Bearer ${settings.resendApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from: serverEnv.emailFrom, to, subject, html }),
+      body: JSON.stringify({ from: settings.from, to, subject, html }),
     });
     if (!res.ok) {
       throw new Error(`Resend failed with status ${res.status}`);
     }
     return { ok: true, provider: "resend" };
-  }
-
-  if (serverEnv.emailProvider === "smtp") {
-    throw new Error("EMAIL_PROVIDER=smtp no está implementado aún (fase de emails). Usa 'console' o 'resend'.");
   }
 
   console.log(`[email:console] to=${to}`);

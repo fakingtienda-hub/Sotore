@@ -23,9 +23,14 @@ type ItemFieldSpec = {
   label: string;
   type: "text" | "textarea" | "lines" | "select" | "font" | "number";
   placeholder?: string;
+  /** Obligatorio si el elemento tiene algún dato (validación en el cliente). */
+  required?: boolean;
 };
 
 type ProductOption = { slug: string; title: string; status: string; theme: string };
+
+type SaveResult = { ok: boolean; error?: string };
+type ItemSaveState = { kind: "saving" | "saved" | "error"; message?: string };
 
 type SectionConfig = {
   section: LandingSection;
@@ -54,7 +59,7 @@ const CONFIGS: SectionConfig[] = [
     description: "Los beneficios del pack.",
     extraFields: [{ key: "eyebrow", label: "Cintillo (eyebrow)", type: "text" }],
     items: [
-      { key: "title", label: "Título", type: "text" },
+      { key: "title", label: "Título", type: "text", required: true },
       { key: "description", label: "Descripción", type: "textarea" },
     ],
     fieldGroups: [
@@ -67,7 +72,7 @@ const CONFIGS: SectionConfig[] = [
     description: "Qué incluye el pack (lista con checkmarks).",
     extraFields: [{ key: "eyebrow", label: "Cintillo (eyebrow)", type: "text" }],
     items: [
-      { key: "title", label: "Título", type: "text" },
+      { key: "title", label: "Título", type: "text", required: true },
       { key: "description", label: "Descripción", type: "textarea" },
     ],
     fieldGroups: [
@@ -80,7 +85,7 @@ const CONFIGS: SectionConfig[] = [
     description: "Bonos u ofertas especiales.",
     extraFields: [{ key: "eyebrow", label: "Cintillo (eyebrow)", type: "text" }],
     items: [
-      { key: "title", label: "Título", type: "text" },
+      { key: "title", label: "Título", type: "text", required: true },
       { key: "description", label: "Descripción", type: "textarea" },
     ],
     fieldGroups: [
@@ -93,9 +98,9 @@ const CONFIGS: SectionConfig[] = [
     description: "Testimonios de clientes.",
     extraFields: [{ key: "eyebrow", label: "Cintillo (eyebrow)", type: "text" }],
     items: [
-      { key: "author", label: "Autor", type: "text" },
+      { key: "author", label: "Autor", type: "text", required: true },
       { key: "role", label: "Rol", type: "text", placeholder: "Costurera" },
-      { key: "quote", label: "Cita", type: "textarea" },
+      { key: "quote", label: "Cita", type: "textarea", required: true },
       { key: "rating", label: "Estrellas (1-5)", type: "number", placeholder: "5" },
     ],
     fieldGroups: [
@@ -108,8 +113,8 @@ const CONFIGS: SectionConfig[] = [
     description: "Preguntas frecuentes (acordeón).",
     extraFields: [{ key: "eyebrow", label: "Cintillo (eyebrow)", type: "text" }],
     items: [
-      { key: "question", label: "Pregunta", type: "text" },
-      { key: "answer", label: "Respuesta", type: "textarea" },
+      { key: "question", label: "Pregunta", type: "text", required: true },
+      { key: "answer", label: "Respuesta", type: "textarea", required: true },
     ],
     fieldGroups: [
       { label: "Titular y cintillo", fields: ["@base", "eyebrow"] },
@@ -137,7 +142,7 @@ const CONFIGS: SectionConfig[] = [
       { key: "featuredProductSlug", label: "Producto destacado (estelar)", type: "select", placeholder: "Selecciona un producto" },
       { key: "titleFont", label: "Tipografía de titulares y precios", type: "font" },
       { key: "tickerItems", label: "Ticker (1 por línea)", type: "lines" },
-      { key: "trustRows", label: "Sellos de confianza del hero (1 por línea)", type: "lines" },
+      { key: "trustRows", label: "Sellos de confianza de la cabecera (1 por línea)", type: "lines" },
       { key: "patternChips", label: "Chips de la hoja de molde (1 por línea)", type: "lines" },
       { key: "heroSecondaryCtaText", label: "Texto botón secundario del hero", type: "text" },
       { key: "heroPriceKicker", label: "Kicker del precio (hero)", type: "text" },
@@ -146,8 +151,7 @@ const CONFIGS: SectionConfig[] = [
       { key: "ctaPriceKicker", label: "Kicker del precio (CTA final)", type: "text" },
       { key: "ctaPriceNote", label: "Nota del precio (CTA final)", type: "text" },
       { key: "ctaFootnote", label: "Nota al pie del CTA final", type: "text" },
-      { key: "headerBadge", label: "Cabecera · sello de confianza", type: "text" },
-      { key: "headerTag", label: "Cabecera · etiqueta", type: "text" },
+      { key: "headerTag", label: "Cabecera · etiqueta (descripción SEO)", type: "text" },
       { key: "footerBadges", label: "Footer · sellos (1 por línea)", type: "lines" },
     ],
     fieldGroups: [
@@ -156,7 +160,7 @@ const CONFIGS: SectionConfig[] = [
       { label: "Ticker y sellos", fields: ["tickerItems", "trustRows", "patternChips"] },
       { label: "Precio del hero", fields: ["heroPriceKicker", "heroPriceNote", "heroSecondaryCtaText"] },
       { label: "Precio del CTA final y bonos", fields: ["bonusTag", "ctaPriceKicker", "ctaPriceNote", "ctaFootnote"] },
-      { label: "Cabecera y footer", fields: ["headerBadge", "headerTag", "footerBadges"] },
+      { label: "Cabecera y footer", fields: ["headerTag", "footerBadges"] },
     ],
   },
 ];
@@ -197,6 +201,15 @@ const DEVICE_WIDTHS: Record<"desktop" | "tablet" | "mobile", string> = {
 const baseInput =
   "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
 
+/** Identificador estable por elemento de lista. No se renderiza: solo da a
+ *  React una clave única aunque dos elementos compartan el mismo texto (así
+ *  "Duplicar" no colapsa el duplicado). Los elementos guardados antes de esta
+ *  función no tienen `id`; se les asigna uno al abrirlos en el editor. */
+function newItemId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `it-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+}
+
 function ItemsEditor({
   sectionId,
   spec,
@@ -210,27 +223,101 @@ function ItemsEditor({
   spec: ItemFieldSpec[];
   items: Array<Record<string, string>>;
   onChange: (items: Array<Record<string, string>>) => void;
-  onSave: (items: Array<Record<string, string>>) => void;
+  onSave: (items: Array<Record<string, string>>) => Promise<SaveResult>;
   emptyMessage: string;
 }) {
+  const [status, setStatus] = useState<Record<string, ItemSaveState>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const timers = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    const all = timers.current;
+    return () => {
+      for (const t of Object.values(all)) window.clearTimeout(t);
+    };
+  }, []);
+
   const patch = (i: number, key: string, value: string) => {
     const next = items.map((item, idx) => (idx === i ? { ...item, [key]: value } : item));
     onChange(next);
     return next;
   };
 
+  // Un elemento totalmente vacío no se valida (aún no se guarda). En cuanto
+  // tiene algún dato, sus campos obligatorios deben estar completos.
+  const missingRequired = (item: Record<string, string>) => {
+    const isBlank = spec.every((f) => (item[f.key] ?? "").trim() === "");
+    if (isBlank) return [];
+    return spec
+      .filter((f) => f.required && (item[f.key] ?? "").trim() === "")
+      .map((f) => f.key);
+  };
+
+  const markStatus = (id: string, next: ItemSaveState | null) => {
+    if (timers.current[id]) window.clearTimeout(timers.current[id]);
+    setStatus((prev) => {
+      const copy = { ...prev };
+      if (next) copy[id] = next;
+      else delete copy[id];
+      return copy;
+    });
+    if (next?.kind === "saved") {
+      timers.current[id] = window.setTimeout(() => markStatus(id, null), 2600);
+    }
+  };
+
+  const commit = (next: Array<Record<string, string>>, id: string) => {
+    markStatus(id, { kind: "saving" });
+    Promise.resolve(onSave(next)).then(
+      (res) => {
+        if (res.ok) {
+          setFieldErrors((prev) => {
+            const copy = { ...prev };
+            delete copy[id];
+            return copy;
+          });
+          markStatus(id, { kind: "saved" });
+        } else {
+          markStatus(id, { kind: "error", message: res.error ?? "No se pudo guardar." });
+        }
+      },
+      () => markStatus(id, { kind: "error", message: "No se pudo guardar." }),
+    );
+  };
+
+  const handleChange = (i: number, key: string, value: string) => {
+    const next = patch(i, key, value);
+    const id = next[i].id ?? String(i);
+    if ((fieldErrors[id]?.length ?? 0) > 0) {
+      const missing = missingRequired(next[i]);
+      setFieldErrors((prev) => ({ ...prev, [id]: missing }));
+    }
+  };
+
+  const handleBlur = (i: number, key: string, value: string) => {
+    const next = patch(i, key, value);
+    const id = next[i].id ?? String(i);
+    const missing = missingRequired(next[i]);
+    setFieldErrors((prev) => ({ ...prev, [id]: missing }));
+    // No se guarda hasta corregir: evita el error genérico del servidor y deja
+    // el aviso junto al campo que falta.
+    if (missing.length > 0) return;
+    void commit(next, id);
+  };
+
   const add = () => {
     // Solo en local: un ítem en blanco no debe guardarse ni disparar la
     // validación del servidor. Se persiste al completarlo (blur) o al guardar
     // cualquier otro cambio de la sección.
-    const blank = Object.fromEntries(spec.map((f) => [f.key, ""])) as Record<string, string>;
+    const blank: Record<string, string> = { id: newItemId() };
+    for (const f of spec) blank[f.key] = "";
     onChange([...items, blank]);
   };
 
   const remove = (i: number) => {
     const next = items.filter((_, idx) => idx !== i);
     onChange(next);
-    onSave(next);
+    void onSave(next);
   };
 
   const move = (i: number, dir: -1 | 1) => {
@@ -239,58 +326,89 @@ function ItemsEditor({
     const next = [...items];
     [next[i], next[j]] = [next[j], next[i]];
     onChange(next);
-    onSave(next);
+    void onSave(next);
   };
 
   const duplicate = (i: number) => {
-    const next = [...items.slice(0, i + 1), { ...items[i] }, ...items.slice(i + 1)];
+    const next = [
+      ...items.slice(0, i + 1),
+      { ...items[i], id: newItemId() },
+      ...items.slice(i + 1),
+    ];
     onChange(next);
-    onSave(next);
+    void onSave(next);
   };
 
   return (
     <div className="space-y-4">
-      {items.map((item, i) => (
-        <div key={i} className="space-y-3 rounded-md border border-border bg-background p-4">
-          <div className="grid gap-3">
-            {spec.map((field) => (
-              <label key={field.key} className="space-y-1">
-                <span className="text-sm font-medium">{field.label}</span>
-                {field.type === "textarea" ? (
-                  <textarea
-                    id={`sf-item-${sectionId}-${i}-${field.key}`}
-                    rows={3}
-                    value={item[field.key] ?? ""}
-                    placeholder={field.placeholder}
-                    onChange={(e) => patch(i, field.key, e.target.value)}
-                    onBlur={(e) => onSave(patch(i, field.key, e.target.value))}
-                    className={baseInput}
-                  />
-                ) : field.type === "number" ? (
-                  <input
-                    id={`sf-item-${sectionId}-${i}-${field.key}`}
-                    type="number"
-                    min={1}
-                    max={5}
-                    value={item[field.key] ?? ""}
-                    placeholder={field.placeholder}
-                    onChange={(e) => patch(i, field.key, e.target.value)}
-                    onBlur={(e) => onSave(patch(i, field.key, e.target.value))}
-                    className={baseInput}
-                  />
-                ) : (
-                  <input
-                    id={`sf-item-${sectionId}-${i}-${field.key}`}
-                    type="text"
-                    value={item[field.key] ?? ""}
-                    placeholder={field.placeholder}
-                    onChange={(e) => patch(i, field.key, e.target.value)}
-                    onBlur={(e) => onSave(patch(i, field.key, e.target.value))}
-                    className={baseInput}
-                  />
-                )}
-              </label>
-            ))}
+      {items.map((item, i) => {
+        const itemId = item.id ?? String(i);
+        const st = status[itemId];
+        const errs = fieldErrors[itemId] ?? [];
+        return (
+          <div
+            key={itemId}
+            className="space-y-3 rounded-md border border-border bg-background p-4"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                Elemento {i + 1}
+              </span>
+              {st ? (
+                <span
+                  role={st.kind === "error" ? "alert" : "status"}
+                  aria-live="polite"
+                  className={`text-xs ${
+                    st.kind === "error"
+                      ? "text-destructive"
+                      : st.kind === "saved"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  {st.kind === "saving"
+                    ? "Guardando…"
+                    : st.kind === "saved"
+                      ? "✓ Guardado"
+                      : st.message}
+                </span>
+              ) : null}
+            </div>
+            <div className="grid gap-3">
+            {spec.map((field) => {
+              const invalid = errs.includes(field.key);
+              const fieldId = `sf-item-${sectionId}-${i}-${field.key}`;
+              const errId = `${fieldId}-error`;
+              const controlProps = {
+                id: fieldId,
+                value: item[field.key] ?? "",
+                placeholder: field.placeholder,
+                "aria-invalid": invalid || undefined,
+                "aria-describedby": invalid ? errId : undefined,
+                onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+                  handleChange(i, field.key, e.target.value),
+                onBlur: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+                  handleBlur(i, field.key, e.target.value),
+                className: `${baseInput}${invalid ? " border-destructive" : ""}`,
+              };
+              return (
+                <label key={field.key} className="space-y-1">
+                  <span className="text-sm font-medium">{field.label}</span>
+                  {field.type === "textarea" ? (
+                    <textarea {...controlProps} rows={3} />
+                  ) : field.type === "number" ? (
+                    <input {...controlProps} type="number" min={1} max={5} />
+                  ) : (
+                    <input {...controlProps} type="text" />
+                  )}
+                  {invalid ? (
+                    <span id={errId} className="text-xs text-destructive">
+                      Este campo es obligatorio.
+                    </span>
+                  ) : null}
+                </label>
+              );
+            })}
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
@@ -328,8 +446,9 @@ function ItemsEditor({
               Quitar elemento
             </button>
           </div>
-        </div>
-      ))}
+          </div>
+        );
+      })}
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">{emptyMessage}</p>
       ) : null}
@@ -379,13 +498,14 @@ function SectionForm({
   });
   const [items, setItems] = useState<Array<Record<string, string>>>(() => {
     const raw = initialContent["items"];
-    return Array.isArray(raw)
-      ? (raw as Array<Record<string, string>>).map((item) =>
-          Object.fromEntries(
-            (config.items ?? []).map((f) => [f.key, String(item[f.key] ?? "")]),
-          ),
-        )
-      : [];
+    if (!Array.isArray(raw)) return [];
+    return (raw as Array<Record<string, unknown>>).map((item) => {
+      const out: Record<string, string> = {
+        id: typeof item.id === "string" && item.id ? item.id : newItemId(),
+      };
+      for (const f of config.items ?? []) out[f.key] = String(item[f.key] ?? "");
+      return out;
+    });
   });
 
   const [manualGroup, setManualGroup] = useState<string | null>(
@@ -508,7 +628,7 @@ function SectionForm({
           spec={config.items}
           items={items}
           onChange={setItems}
-          onSave={(next) => void persist({ items: next })}
+          onSave={(next) => persist({ items: next })}
           emptyMessage="Esta sección no tiene elementos todavía."
         />
       );

@@ -10,6 +10,14 @@ export type ServerEnv = {
   emailProvider: "console" | "resend" | "smtp";
   emailApiKey: string;
   emailFrom: string;
+  emailSmtpHost: string;
+  emailSmtpPort: number;
+  emailSmtpSecure: boolean;
+  emailSmtpUser: string;
+  emailSmtpPassword: string;
+  mailgunDomain: string;
+  mailgunApiKey: string;
+  mailgunApiBase: string;
   isProd: boolean;
   storageDir: string;
   storageBaseUrl: string;
@@ -120,6 +128,18 @@ function buildServerEnv(): ServerEnv {
     emailProvider: optional("EMAIL_PROVIDER", "console") as ServerEnv["emailProvider"],
     emailApiKey: optional("EMAIL_API_KEY", ""),
     emailFrom: optional("EMAIL_FROM", "Fakingstore <hola@fakingstore.com>"),
+    // SMTP (Mailgun u otro relay). El panel `/admin/settings` los sobreescribe
+    // desde la BD; aquí quedan como respaldo por variables de entorno.
+    emailSmtpHost: optional("EMAIL_SMTP_HOST", ""),
+    emailSmtpPort: Number(optional("EMAIL_SMTP_PORT", "587")),
+    emailSmtpSecure: optional("EMAIL_SMTP_SECURE", "").toLowerCase() === "true",
+    emailSmtpUser: optional("EMAIL_SMTP_USER", ""),
+    emailSmtpPassword: optional("EMAIL_SMTP_PASSWORD", ""),
+    // Mailgun por API HTTP (`/v3/{dominio}/messages`). La clave y el dominio se
+    // configuran desde el CRM; la base queda solo en env (por región o pruebas).
+    mailgunDomain: optional("MAILGUN_DOMAIN", ""),
+    mailgunApiKey: optional("MAILGUN_API_KEY", ""),
+    mailgunApiBase: optional("MAILGUN_API_BASE", "https://api.mailgun.net").replace(/\/$/, ""),
     storageDir: optional("STORAGE_DIR", "storage"),
     storageBaseUrl: optional("STORAGE_BASE_URL", "/api/files"),
     maxUploadBytes: Number(optional("STORAGE_MAX_FILE_BYTES", String(512 * 1024 * 1024))),

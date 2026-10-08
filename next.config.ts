@@ -72,6 +72,9 @@ const nextConfig: NextConfig = {
     "@aws-sdk/client-s3",
     "@aws-sdk/lib-storage",
     "@aws-sdk/s3-request-presigner",
+    // nodemailer usa requires dinámicos para sus transportes; se carga desde
+    // node_modules en runtime para que el bundler no lo rompa.
+    "nodemailer",
   ],
   async headers() {
     return [

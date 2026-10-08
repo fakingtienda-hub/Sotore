@@ -91,6 +91,7 @@ function HeroSection({
   secondaryHref: string | null;
 }) {
   const content = data.content as { badge?: string; ctaText?: string };
+  const badge = content.badge?.trim();
   const href = product ? `/checkout/${product.slug}` : "";
   const isBuyable = product?.status === "published";
 
@@ -106,6 +107,11 @@ function HeroSection({
       <div className="sf-wrap grid items-center gap-12 max-sm:gap-6 pt-16 pb-12 max-lg:pt-[88px] lg:min-h-dvh lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16">
         <div>
           <Reveal>
+            {badge ? (
+              <span className="sf-eyebrow mb-4" data-sf-edit="hero.badge">
+                {badge}
+              </span>
+            ) : null}
             <h1
               className="sf-title text-[clamp(2.75rem,9vw,6.25rem)] text-[var(--sf-paper)]"
               data-sf-edit="hero.title"
@@ -195,9 +201,9 @@ function PatternSheet({ title, chips }: { title: string; chips: string[] }) {
 
           {chips.length > 0 ? (
             <div className="mt-8 flex flex-wrap gap-2">
-              {chips.map((chip) => (
+              {chips.map((chip, i) => (
                 <span
-                  key={chip}
+                  key={i}
                   className="border border-dashed border-[rgba(22,17,12,0.5)] px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.18em]"
                 >
                   {chip}
@@ -230,16 +236,20 @@ function PatternSheet({ title, chips }: { title: string; chips: string[] }) {
 }
 
 function BenefitsSection({ data }: { data: LandingSectionData }) {
-  const content = data.content as { items: Array<{ title: string; description?: string }>; eyebrow?: string };
-  if (content.items.length === 0) return null;
+  const content = data.content as {
+    items?: Array<{ id?: string; title: string; description?: string }>;
+    eyebrow?: string;
+  };
+  const items = content.items ?? [];
+  if (items.length === 0) return null;
 
   return (
     <section id="beneficios" className="relative py-8 md:py-10">
       <div className="sf-wrap">
         <SectionHeader section="benefits" eyebrow={content.eyebrow || BENEFITS_EYEBROW} title={data.title || "Por qué te va a encantar"} subtitle={data.subtitle} />
         <div className="mt-8 md:mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {content.items.map((item, i) => (
-            <Reveal key={item.title} delay={i * 70}>
+          {items.map((item, i) => (
+            <Reveal key={item.id ?? i} delay={i * 70}>
               <div className="sf-card h-full">
                 <div className="flex items-center gap-3">
                   <span className="sf-num">{String(i + 1).padStart(2, "0")}</span>
@@ -263,8 +273,12 @@ function BenefitsSection({ data }: { data: LandingSectionData }) {
 }
 
 function ContentSection({ data }: { data: LandingSectionData }) {
-  const content = data.content as { items: Array<{ title: string; description?: string }>; eyebrow?: string };
-  if (content.items.length === 0) return null;
+  const content = data.content as {
+    items?: Array<{ id?: string; title: string; description?: string }>;
+    eyebrow?: string;
+  };
+  const items = content.items ?? [];
+  if (items.length === 0) return null;
 
   return (
     <section id="contenido" className="relative py-8 md:py-10">
@@ -272,9 +286,9 @@ function ContentSection({ data }: { data: LandingSectionData }) {
         <SectionHeader section="content" eyebrow={content.eyebrow || CONTENT_EYEBROW} title={data.title || "Todo lo que trae"} subtitle={data.subtitle} />
         <Reveal className="mt-8 md:mt-10 mx-auto max-w-3xl">
           <ol className="sf-card p-0 overflow-hidden">
-            {content.items.map((item, i) => (
+            {items.map((item, i) => (
               <li
-                key={item.title}
+                key={item.id ?? i}
                 className="flex gap-4 border-b border-dashed border-[var(--sf-line)] p-5 last:border-b-0"
               >
                 <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--sf-thread)] text-sm font-bold text-[var(--sf-ink-2)]">
@@ -300,16 +314,20 @@ function ContentSection({ data }: { data: LandingSectionData }) {
 }
 
 function BonusesSection({ data, site }: { data: LandingSectionData; site: SiteConfig }) {
-  const content = data.content as { items: Array<{ title: string; description?: string }>; eyebrow?: string };
-  if (content.items.length === 0) return null;
+  const content = data.content as {
+    items?: Array<{ id?: string; title: string; description?: string }>;
+    eyebrow?: string;
+  };
+  const items = content.items ?? [];
+  if (items.length === 0) return null;
 
   return (
     <section id="bonos" className="relative py-8 md:py-10">
       <div className="sf-wrap">
         <SectionHeader section="bonuses" eyebrow={content.eyebrow || BONUSES_EYEBROW} title={data.title || "Bonus incluidos"} subtitle={data.subtitle} />
         <div className="mt-8 md:mt-10 grid gap-5 md:grid-cols-2">
-          {content.items.map((item, i) => (
-            <Reveal key={item.title} delay={i * 80}>
+          {items.map((item, i) => (
+            <Reveal key={item.id ?? i} delay={i * 80}>
               <div className="sf-patch h-full">
                 <span className="inline-block border border-[rgba(22,17,12,0.5)] px-2.5 py-1 font-mono text-[12px] font-bold tracking-[0.2em] text-[var(--sf-tag-ink)]">
                   {site.bonusTag}
@@ -333,20 +351,21 @@ function BonusesSection({ data, site }: { data: LandingSectionData; site: SiteCo
 
 function TestimonialsSection({ data }: { data: LandingSectionData }) {
   const content = data.content as {
-    items: Array<{ author: string; role?: string; quote: string; rating?: number }>;
+    items?: Array<{ id?: string; author: string; role?: string; quote: string; rating?: number }>;
     eyebrow?: string;
   };
-  if (content.items.length === 0) return null;
+  const items = content.items ?? [];
+  if (items.length === 0) return null;
 
   return (
     <section id="testimonios" className="relative py-8 md:py-10">
       <div className="sf-wrap">
         <SectionHeader section="testimonials" eyebrow={content.eyebrow || TESTIMONIALS_EYEBROW} title={data.title || "Resultados reales"} subtitle={data.subtitle} />
         <div className="mt-8 md:mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {content.items.map((item, i) => {
+          {items.map((item, i) => {
             const rating = Math.min(5, Math.max(0, item.rating ?? 5));
             return (
-              <Reveal key={item.author} delay={i * 80}>
+              <Reveal key={item.id ?? i} delay={i * 80}>
                 <figure className="sf-card flex h-full flex-col">
                   <div className="flex gap-1 text-[var(--sf-gold)]" aria-hidden="true">
                     {Array.from({ length: rating }).map((_, s) => (
@@ -375,8 +394,12 @@ function TestimonialsSection({ data }: { data: LandingSectionData }) {
 }
 
 function FaqSection({ data }: { data: LandingSectionData }) {
-  const content = data.content as { items: Array<{ question: string; answer: string }>; eyebrow?: string };
-  if (content.items.length === 0) return null;
+  const content = data.content as {
+    items?: Array<{ id?: string; question: string; answer: string }>;
+    eyebrow?: string;
+  };
+  const items = content.items ?? [];
+  if (items.length === 0) return null;
 
   return (
     <section id="faq" className="relative py-8 md:py-10">
@@ -384,8 +407,8 @@ function FaqSection({ data }: { data: LandingSectionData }) {
         <SectionHeader section="faq" eyebrow={content.eyebrow || FAQ_EYEBROW} title={data.title || "Antes de comprar"} subtitle={data.subtitle} />
         <Reveal className="mt-8 md:mt-10 mx-auto max-w-3xl">
           <div className="sf-card p-0 overflow-hidden">
-            {content.items.map((item, i) => (
-              <details key={item.question} className="sf-faq border-b border-dashed border-[var(--sf-line)] last:border-b-0 px-6">
+            {items.map((item, i) => (
+              <details key={item.id ?? i} className="sf-faq border-b border-dashed border-[var(--sf-line)] last:border-b-0 px-6">
                 <summary>
                   <span className="font-semibold text-[var(--sf-paper)]" data-sf-edit={`faq.items.${i}.question`}>
                     {item.question}

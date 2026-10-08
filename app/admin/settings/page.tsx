@@ -1,15 +1,16 @@
-import { getWompiSettings, getStoreSettings } from "@/lib/server/actions/settings";
+import { getWompiSettings, getStoreSettings, getEmailSettings } from "@/lib/server/actions/settings";
 import { getReconciliationPanel } from "@/lib/server/actions/reconciliation";
 import { SettingsForm } from "./_components/settings-form";
 import { WompiSettingsForm } from "./_components/wompi-settings-form";
+import { EmailSettingsForm } from "./_components/email-settings-form";
 import { ReconciliationPanel } from "./_components/reconciliation-panel";
 
 export const dynamic = "force-dynamic";
-
 export default async function AdminSettingsPage() {
-  const [settings, wompi, reconciliation] = await Promise.all([
+  const [settings, wompi, email, reconciliation] = await Promise.all([
     getStoreSettings(),
     getWompiSettings(),
+    getEmailSettings(),
     getReconciliationPanel(),
   ]);
 
@@ -21,6 +22,7 @@ export default async function AdminSettingsPage() {
       </p>
       <SettingsForm initial={settings} />
       <WompiSettingsForm initial={wompi} />
+      <EmailSettingsForm initial={email} />
       <ReconciliationPanel status={reconciliation} />
     </div>
   );
