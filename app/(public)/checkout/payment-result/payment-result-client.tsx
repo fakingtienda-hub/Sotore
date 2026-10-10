@@ -5,8 +5,12 @@ import { useEffect, useState } from "react";
 
 import { getCheckoutOrderStatus, getLibraryAccessUrl } from "@/lib/server/actions/checkout";
 
-const POLL_INTERVAL_MS = 4000;
-const MAX_POLLS = 30;
+/* El servidor consulta a Wompi en cada sondeo, así que el estado llega en
+   cuanto la pasarela lo sabe; el intervalo solo decide cuánto tarda en verse.
+   3s con hasta 40 intentos mantiene los mismos ~2 minutos de paciencia que
+   antes, pero se entera del pago en la mitad de tiempo. */
+const POLL_INTERVAL_MS = 3000;
+const MAX_POLLS = 40;
 
 const TERMINAL_STATUSES = new Set(["declined", "error", "voided", "expired"]);
 const TERMINAL_RESULT_CODES = new Set(["DECLINED", "VOIDED", "ERROR", "REJECTED", "EXPIRED"]);
@@ -77,7 +81,7 @@ export function PaymentResultClient({
       timer = setTimeout(poll, POLL_INTERVAL_MS);
     };
 
-    timer = setTimeout(poll, 800);
+    timer = setTimeout(poll, 400);
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);

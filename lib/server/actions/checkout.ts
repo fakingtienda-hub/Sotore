@@ -13,6 +13,7 @@ import { claimCouponForApprovedOrder } from "@/lib/server/coupon-usage";
 import { setOrderTokenCookie, ownerMatchesOrder } from "@/lib/server/order-ownership";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { getWompiConfig } from "@/lib/server/wompi";
+import { confirmOrderWithWompi } from "@/lib/server/reconciliation";
 import { getSession } from "@/lib/auth/session";
 import { serverEnv } from "@/lib/serverEnv";
 import { orderExpiresAt, expireStalePendingOrders } from "@/lib/server/order-expiry";
@@ -397,7 +398,25 @@ export async function getCheckoutOrderStatus(
     return { ok: false, error: "La orden no existe." };
   }
 
-  return { ok: true, status: order.status };
+  // Confirmación a demanda: mientras la orden siga pendiente se le pregunta a
+  // Wompi AHORA, en vez de esperar a que llegue el webhook o a que corra la
+  // reconciliación (que necesita un cron externo que puede no estar puesto).
+  // Antes de esto el comprador veía "Confirmando…" hasta agotar los sondeos,
+  // con el pago ya cobrado. Un fallo de la consulta no rompe la página: se
+  // devuelve el estado que haya en la base.
+  let status = order.status;
+  if (status === "pending") {
+    const confirmed = await confirmOrderWithWompi(orderCode).catch(() => null);
+    if (confirmed && confirmed !== status) {
+      status = confirmed;
+      // El acceso recién concedido tiene que verse en la biblioteca sin esperar
+      // a que otra petición revalide la ruta.
+      revalidatePath("/library");
+      revalidatePath("/admin/sales");
+    }
+  }
+
+  return { ok: true, status };
 }
 
 /**

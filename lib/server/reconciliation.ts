@@ -41,6 +41,8 @@ import {
 const PAYMENT_LOOKBACK_HOURS = 72;
 /** Tope de órdenes por corrida, para no martillar la base ni la API. */
 const MAX_ORDERS_PER_RUN = 200;
+/** Antigüedad máxima de una orden para consultarla a demanda (nivel 3). */
+const ON_DEMAND_LOOKUP_MAX_MS = 60 * 60 * 1000;
 
 export type ReconcileReport = {
   ranAt: string;
@@ -140,6 +142,68 @@ function toTransaction(t: WompiTransactionResponse): WompiTransactionLike {
     currency: t.currency ?? null,
     created_at: t.created_at ?? null,
   };
+}
+
+/**
+ * Nivel 3: confirmación a demanda de UNA orden, en el momento.
+ *
+ * La página de resultado (`/checkout/payment-result`) solo consultaba la base,
+ * así que el comprador se quedaba en "Confirmando…" hasta que llegara el
+ * webhook o corriera la reconciliación — y esta última necesita un cron
+ * externo que puede no estar configurado. Es la versión de un solo comprador
+ * de `recoverMissedPayments`: le pregunta la verdad a Wompi ya y reutiliza la
+ * MISMA puerta de aprobación (`approveOrderFromTransaction`), con su validación
+ * de monto y moneda y su claim atómico, así que no se puede aprobar de más.
+ *
+ * Solo actúa sobre órdenes `pending` recientes: pasada la ventana, recuperar el
+ * pago es trabajo del cron, no de cada sondeo del navegador.
+ *
+ * Devuelve el estado de la orden tras el intento, o `null` si no se pudo
+ * resolver (Wompi sin configurar o fallo de la API).
+ */
+export async function confirmOrderWithWompi(orderCode: string): Promise<string | null> {
+  const config = await getWompiConfig();
+  if (!config.configured) return null;
+
+  const [order] = await db
+    .select()
+    .from(schema.orders)
+    .where(eq(schema.orders.code, orderCode))
+    .limit(1);
+  if (!order) return null;
+  if (order.status !== "pending") return order.status;
+
+  if (Date.now() - order.createdAt.getTime() > ON_DEMAND_LOOKUP_MAX_MS) {
+    return order.status;
+  }
+
+  // Con id de transacción la consulta es directa y barata. Sin él —el caso del
+  // pago recién hecho, donde ni siquiera hubo webhook— se empareja la ventana
+  // por `reference`, que es el código de la orden. Igual que el nivel 2: el
+  // reference no se acepta desde el cliente, se toma de la transacción.
+  let tx: WompiTransactionResponse | null = order.gatewayReference
+    ? await fetchWompiTransaction(config, order.gatewayReference)
+    : null;
+  if (!tx) {
+    const listed = await fetchWompiTransactionsSince(config, order.createdAt);
+    tx =
+      listed.find(
+        (t) => t.reference === order.code && t.status?.toUpperCase() === "APPROVED",
+      ) ?? null;
+  }
+  if (!tx || tx.status?.toUpperCase() !== "APPROVED") return order.status;
+
+  // La revalidación de rutas NO va aquí: `revalidatePath` exige un contexto de
+  // petición, y esta función también se llama desde scripts de verificación. La
+  // hace el caller (`getCheckoutOrderStatus`), que siempre corre en una request.
+  await approveOrderFromTransaction(order, toTransaction(tx));
+
+  const [after] = await db
+    .select({ status: schema.orders.status })
+    .from(schema.orders)
+    .where(eq(schema.orders.id, order.id))
+    .limit(1);
+  return after?.status ?? order.status;
 }
 
 /**

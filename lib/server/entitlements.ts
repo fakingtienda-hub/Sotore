@@ -17,10 +17,26 @@ import * as schema from "@/lib/db/schema";
  * Envuelve `grantOrderEntitlements` (que es la parte de base de datos) para
  * invalidar la caché de la biblioteca sólo cuando algo cambió de verdad.
  */
+/**
+ * Invalida la caché de la biblioteca sin poder tumbar la operación.
+ *
+ * `revalidatePath` exige un contexto de petición: fuera de él (los scripts de
+ * `npm run verify:*`) lanza y rompía la entrega entera. Revalidar es una
+ * cuestión de caché, no de corrección — las compras ya están escritas —, así
+ * que un fallo aquí nunca debe impedir conceder el acceso.
+ */
+function revalidateLibrary(): void {
+  try {
+    revalidatePath("/library");
+  } catch {
+    // Sin contexto de petición (script, cron): no hay caché que invalidar.
+  }
+}
+
 export async function ensureOrderEntitlements(orderId: string): Promise<GrantResult> {
   const result = await grantOrderEntitlements(orderId);
   if (result.ok) {
-    revalidatePath("/library");
+    revalidateLibrary();
   }
   return result;
 }
@@ -112,7 +128,7 @@ export async function revokeOrderEntitlements(orderId: string): Promise<void> {
     .update(schema.purchases)
     .set({ status: "revoked", revokedAt: new Date() })
     .where(eq(schema.purchases.orderId, orderId));
-  revalidatePath("/library");
+  revalidateLibrary();
 }
 
 /** Devuelve la purchase activa de un usuario para un producto, si existe. */
