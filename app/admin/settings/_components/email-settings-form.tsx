@@ -339,18 +339,28 @@ export function EmailSettingsForm({
 
         <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="text-2xl font-semibold tabular-nums">
-              {usageState.sentToday}
-              <span className="text-base font-normal text-muted-foreground">
-                {" / "}
-                {usageState.dailyLimit}
-              </span>
-            </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {usageState.criticalReserve > 0
-                ? `${usageState.criticalReserve} turnos reservados a correos críticos`
-                : "Sin reserva para correos críticos"}
-            </p>
+            {usageState.available ? (
+              <>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {usageState.sentToday}
+                  <span className="text-base font-normal text-muted-foreground">
+                    {" / "}
+                    {usageState.dailyLimit}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {usageState.criticalReserve > 0
+                    ? `${usageState.criticalReserve} turnos reservados a correos críticos`
+                    : "Sin reserva para correos críticos"}
+                </p>
+              </>
+            ) : (
+              <p className="max-w-sm text-xs text-amber-700 dark:text-amber-400">
+                La bitácora de correo no está disponible en este entorno: falta aplicar la
+                migración de la tabla <code>email_log</code>. Mientras tanto no se puede medir el
+                consumo ni evitar envíos duplicados; los correos críticos se siguen enviando.
+              </p>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -377,9 +387,11 @@ export function EmailSettingsForm({
           </div>
         </div>
 
-        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-          <div className={`h-full rounded-full ${barTone}`} style={{ width: `${pct}%` }} />
-        </div>
+        {usageState.available ? (
+          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+            <div className={`h-full rounded-full ${barTone}`} style={{ width: `${pct}%` }} />
+          </div>
+        ) : null}
 
         {chips.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
@@ -414,11 +426,11 @@ export function EmailSettingsForm({
               </tbody>
             </table>
           </div>
-        ) : (
+        ) : usageState.available ? (
           <p className="mt-4 text-xs text-muted-foreground">
             Todavía no se ha registrado ningún correo.
           </p>
-        )}
+        ) : null}
       </div>
 
       <div className="mt-6 border-t border-border pt-5">

@@ -334,6 +334,12 @@ export async function settleEmail(
 }
 
 export type EmailUsage = {
+  /**
+   * `false` si la bitácora no se pudo leer (típicamente porque la migración de
+   * `email_log` todavía no se aplicó). El panel muestra un aviso en vez de
+   * ceros, que parecerían datos reales.
+   */
+  available: boolean;
   /** Correos que ya ocuparon turno hoy (enviados o en vuelo). */
   sentToday: number;
   /** Omisiones de hoy, por motivo. */
@@ -354,8 +360,35 @@ export type EmailUsage = {
   }>;
 };
 
-/** Resumen para el panel: cuánto se llevó gastado hoy y qué se descartó. */
+/**
+ * Resumen para el panel: cuánto se llevó gastado hoy y qué se descartó.
+ *
+ * Nunca lanza. La bitácora es información ACCESORIA: si su tabla no existe
+ * (migración pendiente) o la BD no responde, la página de configuración tiene
+ * que seguir abriendo — antes, un 500 aquí tumbaba TODO el panel de ajustes.
+ */
 export async function getEmailUsage(policy: EmailPolicy): Promise<EmailUsage> {
+  const unavailable: EmailUsage = {
+    available: false,
+    sentToday: 0,
+    skippedToday: { duplicate: 0, rate_limit: 0, quota: 0, circuit: 0 },
+    failedToday: 0,
+    dailyLimit: policy.dailyLimit,
+    criticalReserve: policy.criticalReserve,
+    circuitOpen: isEmailCircuitOpen(),
+    recent: [],
+  };
+
+  try {
+    return { available: true, ...(await readEmailUsage(policy)) };
+  } catch {
+    return unavailable;
+  }
+}
+
+async function readEmailUsage(
+  policy: EmailPolicy,
+): Promise<Omit<EmailUsage, "available">> {
   const dayStart = startOfUtcDay();
 
   const [totals] = await db
