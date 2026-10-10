@@ -51,7 +51,7 @@ export function ReconciliationPanel({ status }: { status: ReconcileStatus }) {
     status.hoursSinceLastRun != null && status.hoursSinceLastRun > 24;
 
   return (
-    <div className="mt-6 max-w-2xl rounded-2xl border border-border bg-card p-6">
+    <div className="mt-6 max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="font-display text-lg font-semibold">Reconciliación de pagos</h2>

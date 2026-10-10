@@ -33,7 +33,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold">Dashboard</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Dashboard</h1>
       <p className="mt-2 text-muted-foreground">
         Resumen de ventas, clientes y descargas de la tienda.
       </p>
@@ -83,7 +83,7 @@ export default async function AdminDashboardPage() {
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
-          <div key={card.label} className="rounded-lg border border-border bg-card p-6">
+          <div key={card.label} className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <p className="text-sm text-muted-foreground">{card.label}</p>
             <p className="mt-2 font-display text-3xl font-semibold">{card.value}</p>
             <p className="mt-1 text-xs text-muted-foreground">{card.sub}</p>
@@ -92,7 +92,7 @@ export default async function AdminDashboardPage() {
       </div>
 
       <div className="mt-10 grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-border bg-card p-6">
+        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold">Productos más vendidos</h2>
             <Link href="/admin/sales" className="text-sm text-muted-foreground hover:text-foreground">
@@ -117,7 +117,7 @@ export default async function AdminDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-lg border border-border bg-card p-6">
+        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold">Últimas órdenes</h2>
             <Link href="/admin/sales" className="text-sm text-muted-foreground hover:text-foreground">

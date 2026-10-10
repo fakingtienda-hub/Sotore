@@ -27,7 +27,7 @@ export default async function AdminDownloadsPage() {
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold">Descargas</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Descargas</h1>
       <p className="mt-2 text-muted-foreground">
         Registro de descargas de archivos por cliente.
       </p>
@@ -37,7 +37,7 @@ export default async function AdminDownloadsPage() {
           <p className="text-sm text-muted-foreground">Aún no hay descargas registradas.</p>
         </div>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">

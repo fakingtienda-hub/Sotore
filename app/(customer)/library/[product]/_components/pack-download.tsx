@@ -39,7 +39,7 @@ export function PackDownload({ product, fileCount }: PackDownloadProps) {
 
       <h1 className="mt-4 font-display text-2xl font-semibold tracking-tight">{product.title}</h1>
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {product.coverImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

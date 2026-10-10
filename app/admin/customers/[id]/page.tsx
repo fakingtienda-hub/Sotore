@@ -35,7 +35,7 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-border bg-card p-6">
+        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <h2 className="font-display text-lg font-semibold">Compras ({customer.orders.length})</h2>
           {customer.orders.length === 0 ? (
             <p className="mt-6 text-sm text-muted-foreground">Este cliente aún no tiene órdenes.</p>
@@ -65,7 +65,7 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
           )}
         </section>
 
-        <section className="rounded-lg border border-border bg-card p-6">
+        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <h2 className="font-display text-lg font-semibold">Descargas ({customer.downloads.length})</h2>
           {customer.downloads.length === 0 ? (
             <p className="mt-6 text-sm text-muted-foreground">Este cliente aún no descargó archivos.</p>

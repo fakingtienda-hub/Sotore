@@ -70,7 +70,7 @@ export function SettingsForm({ initial }: { initial: StoreSettings }) {
   );
 
   return (
-    <div className="mt-6 max-w-2xl rounded-2xl border border-border bg-card p-6">
+    <div className="mt-6 max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-sm">
       <p className="mb-6 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-400">
         ✎ Los cambios se guardan automáticamente al salir de cada campo.
       </p>

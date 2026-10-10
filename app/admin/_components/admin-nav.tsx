@@ -34,10 +34,10 @@ const bottomItems: NavItem[] = [
 /** `compact` = riel de iconos (menú retraído): sin texto, con tooltip nativo. */
 function itemClass(active: boolean, compact: boolean) {
   return [
-    "flex items-center rounded-sm text-sm transition-colors",
+    "flex items-center rounded-md text-sm transition-colors",
     compact ? "justify-center px-0 py-2.5" : "gap-2.5 px-2.5 py-2",
     active
-      ? "bg-secondary text-secondary-foreground"
+      ? "bg-accent font-medium text-accent-foreground"
       : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground",
   ].join(" ");
 }
@@ -76,6 +76,7 @@ export function AdminNav({
         href={item.href}
         title={compact ? item.label : undefined}
         aria-label={compact ? item.label : undefined}
+        aria-current={active ? "page" : undefined}
         className={itemClass(active, compact)}
       >
         <ItemIcon className="h-[18px] w-[18px] shrink-0" />

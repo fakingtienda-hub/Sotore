@@ -16,7 +16,7 @@ export default async function AdminSettingsPage() {
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold">Configuración</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Configuración</h1>
       <p className="mt-2 text-muted-foreground">
         Datos generales de la tienda, credenciales de pago y redes sociales.
       </p>

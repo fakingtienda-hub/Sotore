@@ -1,6 +1,6 @@
 /* ============================================================================
    Galería de patrones — interior de un producto en la biblioteca del usuario.
-   Estética cálida y editorial de la referencia (marfil / terracota / beige).
+   Estética SaaS premium (perla / blanco / violeta) alineada con el CRM.
    Todo el estilo vive bajo el scope `.library-gallery` para no afectar las
    rutas del CRM / admin ni la tienda.
    ========================================================================== */
@@ -8,24 +8,26 @@
 .library-gallery {
   --page-gutter: clamp(16px, 2.4vw, 48px);
   --content-max: 1680px;
-  --bg: #fbfaf6;
+  --bg: #f7f8fa;
   --surface: #ffffff;
-  --surface-soft: #f8f1e9;
-  --surface-warm: #f4e6da;
-  --border: #eadfd4;
-  --border-strong: #d9c9bc;
-  --text: #292522;
-  --muted: #746b63;
-  --muted-light: #9a9087;
-  --terracotta: #c85d43;
-  --terracotta-dark: #ae4e38;
-  --terracotta-soft: #edc0ae;
-  --coral-pale: #f6d7ca;
-  --shadow-sm: 0 4px 14px rgba(93, 62, 43, 0.07);
-  --shadow-md: 0 10px 28px rgba(93, 62, 43, 0.1);
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
+  --surface-soft: #f2f4f7;
+  --surface-warm: #edeafc;
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
+  --text: #182230;
+  --muted: #667085;
+  --muted-light: #98a2b3;
+  /* Acento de marca: violeta (los nombres --terracotta* se conservan para no
+     tocar los cientos de usos existentes; ahora apuntan a la paleta violeta). */
+  --terracotta: #705cf0;
+  --terracotta-dark: #5a48d8;
+  --terracotta-soft: #c8c0f7;
+  --coral-pale: #edeafc;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 16px rgba(16, 24, 40, 0.1);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
 
   width: min(100% - (var(--page-gutter) * 2), var(--content-max));
   max-width: var(--content-max);
@@ -34,8 +36,8 @@
 
   color: var(--text);
   background: var(--bg);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -101,7 +103,7 @@
   padding: clamp(20px, 2.3vw, 34px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(105deg, #fcfbf8 0%, #fffdfa 68%, #f9f0e8 100%);
+  background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
 
@@ -116,7 +118,7 @@
   width: 190px;
   max-height: 205px;
   object-fit: contain;
-  filter: drop-shadow(0 14px 12px rgba(76, 49, 35, 0.16));
+  filter: drop-shadow(0 14px 12px rgba(16, 24, 40, 0.16));
 }
 
 .library-gallery .product-visual .hero-fallback {
@@ -137,7 +139,7 @@
 
 .library-gallery .product-copy h1 {
   margin: 0;
-  color: #28221e;
+  color: var(--text);
   font-size: clamp(1.55rem, 2.25vw, 2.65rem);
   line-height: 1.08;
   letter-spacing: -0.035em;
@@ -172,7 +174,7 @@
   justify-content: center;
   gap: 9px;
   min-height: 44px;
-  border-radius: 9px;
+  border-radius: 10px;
   border: 1px solid transparent;
   font-weight: 700;
   text-decoration: none;
@@ -184,13 +186,13 @@
   padding: 0 27px;
   color: #fff;
   background: var(--terracotta);
-  box-shadow: 0 7px 15px rgba(200, 93, 67, 0.22);
+  box-shadow: 0 7px 15px rgba(112, 92, 240, 0.24);
 }
 
 .library-gallery .primary-button:hover {
   background: var(--terracotta-dark);
   transform: translateY(-1px);
-  box-shadow: 0 9px 18px rgba(174, 78, 56, 0.24);
+  box-shadow: 0 9px 18px rgba(90, 72, 216, 0.28);
 }
 
 .library-gallery .secondary-button {
@@ -210,16 +212,16 @@
   gap: 14px;
   align-items: flex-start;
   padding: 18px 20px;
-  border: 1px solid #edd9cb;
+  border: 1px solid #e1dcfb;
   border-radius: var(--radius-md);
-  color: #60483c;
-  background: #f9eae0;
+  color: #42307a;
+  background: #f3f1fe;
   font-size: 0.93rem;
   line-height: 1.45;
 }
 
 .library-gallery .hero-note strong {
-  color: #49352d;
+  color: #2c2470;
 }
 
 .library-gallery .hero-note .hero-note-icon {
@@ -243,7 +245,7 @@
   gap: 12px;
   min-width: 0;
   padding: 6px 16px;
-  color: #302923;
+  color: var(--text);
   font-size: 0.92rem;
   font-weight: 600;
   white-space: nowrap;
@@ -314,7 +316,7 @@
   padding: 0 13px;
   padding-right: 34px;
   border-radius: 10px;
-  color: #3d352f;
+  color: var(--text);
   outline: 0;
 }
 
@@ -357,7 +359,8 @@
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #fffdf9;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .library-gallery .category-list {
@@ -372,8 +375,8 @@
   min-height: 58px;
   padding: 0 15px;
   border: 0;
-  border-bottom: 1px solid #f0e8e0;
-  color: #5a4e46;
+  border-bottom: 1px solid var(--border);
+  color: #475467;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -384,7 +387,7 @@
 }
 
 .library-gallery .category-item:hover {
-  background: #fff6ef;
+  background: #f5f4fe;
 }
 
 .library-gallery .category-item.is-active {
@@ -393,7 +396,7 @@
   border: 0;
   border-radius: 10px;
   color: #fff;
-  background: linear-gradient(100deg, #d97859, #c76247);
+  background: var(--terracotta);
 }
 
 .library-gallery .category-icon {
@@ -410,14 +413,14 @@
 .library-gallery .category-count {
   padding: 3px 9px;
   border-radius: 99px;
-  color: #806c60;
-  background: #f4ece5;
+  color: var(--muted);
+  background: var(--surface-soft);
   font-size: 0.78rem;
   font-weight: 700;
 }
 
 .library-gallery .category-item.is-active .category-count {
-  color: #a9553e;
+  color: var(--terracotta-dark);
   background: #fff;
 }
 
@@ -455,7 +458,7 @@
 
 .library-gallery .pattern-title h2 {
   margin: 0;
-  color: #302924;
+  color: var(--text);
   font-size: clamp(1.35rem, 2vw, 2rem);
   letter-spacing: -0.035em;
 }
@@ -476,7 +479,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  color: #62574f;
+  color: #475467;
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
@@ -551,7 +554,7 @@
   margin: 12px 12px 0;
   overflow: hidden;
   border-radius: 8px;
-  background: #f3eee8;
+  background: var(--surface-soft);
 }
 
 .library-gallery .pattern-card-media img {
@@ -594,7 +597,7 @@
 }
 
 .library-gallery .card-favorite:hover {
-  background: #fff6ef;
+  background: #f5f4fe;
   transform: scale(1.06);
 }
 
@@ -622,7 +625,7 @@
 
 .library-gallery .pattern-name {
   margin: 0 0 12px;
-  color: #39302b;
+  color: var(--text);
   font-size: 0.96rem;
   font-weight: 750;
   display: -webkit-box;
@@ -697,7 +700,7 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(55, 34, 24, 0.55);
+  background: rgba(16, 24, 40, 0.5);
   backdrop-filter: blur(3px);
 }
 
@@ -795,7 +798,7 @@
    Accesibilidad
    -------------------------------------------------------------------------- */
 .library-gallery :focus-visible {
-  outline: 3px solid rgba(200, 93, 67, 0.35);
+  outline: 2px solid var(--terracotta);
   outline-offset: 2px;
 }
 
@@ -878,7 +881,7 @@
   .library-gallery .category-item {
     min-width: 160px;
     border-bottom: 0;
-    border-right: 1px solid #f0e8e0;
+    border-right: 1px solid var(--border);
   }
 
   .library-gallery .category-item.is-active {

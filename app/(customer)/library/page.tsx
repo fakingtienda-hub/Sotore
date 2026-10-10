@@ -68,7 +68,7 @@ export default async function LibraryPage() {
             <Link
               key={item.purchaseId}
               href={`/library/${item.slug}`}
-              className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-colors hover:border-primary/40"
+              className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
             >
               {item.coverImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element

@@ -105,3 +105,113 @@
     @apply bg-background text-foreground font-sans;
   }
 }
+
+/* ============================================================================
+   Tema premium aplicado SOLO al CRM (`/admin`) y a la biblioteca del cliente
+   (`/library`). El resto de la tienda (landing, checkout, storefront) conserva
+   su paleta cálida actual, que vive en los tokens `:root`.
+
+   Los utilities de Tailwind (`bg-card`, `text-muted-foreground`, `border-border`,
+   `bg-primary`…) se resuelven contra las variables CSS base (`--card`,
+   `--muted-foreground`…) gracias al `@theme inline` de arriba. Al redefinir
+   únicamente esas variables dentro de `.crm-scope` / `.customer-scope`,
+   todo el árbol hereda la nueva paleta sin tocar clases ni HTML.
+   ========================================================================== */
+
+.crm-scope,
+.customer-scope {
+  /* Superficies */
+  --background: #f7f8fa;
+  --card: #ffffff;
+  --popover: #ffffff;
+
+  /* Texto */
+  --foreground: #182230;
+  --card-foreground: #182230;
+  --popover-foreground: #182230;
+
+  /* Acento violeta */
+  --primary: #705cf0;
+  --primary-foreground: #ffffff;
+  --accent: #edeafc;
+  --accent-foreground: #3a2f96;
+
+  /* Grises de apoyo (8px grid) */
+  --secondary: #eef1f6;
+  --secondary-foreground: #182230;
+  --muted: #f2f4f7;
+  --muted-foreground: #667085;
+
+  /* Semánticos */
+  --destructive: #d92d20;
+  --destructive-foreground: #ffffff;
+
+  /* Bordes sutiles */
+  --border: #e4e7ec;
+  --input: #d0d5dd;
+  --ring: #705cf0;
+
+  /* Radios 12–16px para tarjetas, controles más compactos */
+  --radius: 0.75rem;
+
+  color-scheme: light;
+}
+
+.dark .crm-scope,
+.dark .customer-scope {
+  --background: #0f1117;
+  --card: #171a22;
+  --popover: #171a22;
+
+  --foreground: #eceef3;
+  --card-foreground: #eceef3;
+  --popover-foreground: #eceef3;
+
+  --primary: #8b7cf5;
+  --primary-foreground: #14111f;
+  --accent: #262444;
+  --accent-foreground: #eceef3;
+
+  --secondary: #232734;
+  --secondary-foreground: #eceef3;
+  --muted: #1c202b;
+  --muted-foreground: #99a1b2;
+
+  --destructive: #f04438;
+  --destructive-foreground: #ffffff;
+
+  --border: #262b38;
+  --input: #343b4a;
+  --ring: #8b7cf5;
+
+  color-scheme: dark;
+}
+
+/* Foco visible y consistente en todo el CRM / biblioteca: contorno violeta de
+   2px, suficiente contraste (≥3:1) sobre superficies claras y oscuras. */
+.crm-scope :focus-visible,
+.customer-scope :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Controles: mantener las transiciones cortas del brief (150–200ms). */
+.crm-scope a,
+.crm-scope button,
+.customer-scope a,
+.customer-scope button {
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease,
+    opacity 150ms ease;
+}
+
+/* Hover de acciones primarias: violeta más profundo en vez de opacidad, para que
+   el texto blanco siga cumpliendo AA (≥4.5:1) durante el estado hover. */
+.crm-scope .hover\:bg-primary\/90:hover,
+.customer-scope .hover\:bg-primary\/90:hover {
+  background-color: #5a48d8;
+}

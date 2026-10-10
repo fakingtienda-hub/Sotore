@@ -104,7 +104,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     : "md:static md:flex md:w-48 md:shadow-none";
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="crm-scope flex min-h-screen bg-background">
       {drawerOpen ? (
         <button
           type="button"

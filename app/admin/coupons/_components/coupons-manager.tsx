@@ -138,7 +138,7 @@ export function CouponsManager({ coupons, products }: CouponsManagerProps) {
       </div>
 
       {showForm && (
-        <div className="rounded-lg border border-border bg-card p-6">
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-lg font-semibold">
               {editing ? `Editar cupón ${editing.code}` : "Nuevo cupón"}
@@ -293,7 +293,7 @@ export function CouponsManager({ coupons, products }: CouponsManagerProps) {
           </p>
         </div>
       ) : coupons.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">

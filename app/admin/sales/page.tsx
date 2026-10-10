@@ -46,7 +46,7 @@ export default async function AdminSalesPage({
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold">Ventas</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Ventas</h1>
       <p className="mt-2 text-muted-foreground">
         Órdenes de la tienda con filtros por fecha, producto, estado, cliente y pagos que
         requieren atención.
@@ -60,7 +60,7 @@ export default async function AdminSalesPage({
           <p className="mt-1 text-sm text-muted-foreground">Probá quitar filtros para ver más resultados.</p>
         </div>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">

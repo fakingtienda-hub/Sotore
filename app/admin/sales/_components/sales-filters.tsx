@@ -44,7 +44,7 @@ export function SalesFilters({
   const labelClass = "block text-xs font-medium text-muted-foreground";
 
   return (
-    <div className="mt-6 rounded-2xl border border-border bg-card p-4">
+    <div className="mt-6 rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
           <label htmlFor="sales-q" className={labelClass}>

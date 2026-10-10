@@ -18,7 +18,7 @@ export default async function AdminCustomersPage({
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold">Clientes</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Clientes</h1>
       <p className="mt-2 text-muted-foreground">
         Mini CRM: compras, total gastado y actividad por cliente.
       </p>
@@ -46,7 +46,7 @@ export default async function AdminCustomersPage({
           </p>
         </div>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">

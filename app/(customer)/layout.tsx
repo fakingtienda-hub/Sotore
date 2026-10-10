@@ -13,7 +13,7 @@ export default async function CustomerLayout({ children }: { children: ReactNode
   const user = await requireUser();
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="customer-scope flex min-h-screen flex-col bg-background">
       <header className="flex h-14 shrink-0 items-center border-b border-border bg-card px-4 md:px-8">
         <Link href="/" className="mr-6 font-display text-lg font-semibold">
           Fakingstore
