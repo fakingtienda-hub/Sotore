@@ -178,7 +178,7 @@ export function EmailSettingsForm({
   );
 
   return (
-    <div className="mt-6 max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
       <h2 className="font-display text-lg font-semibold">Correo · Mailgun (SMTP o API)</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Los envíos (acceso por enlace mágico, recuperación de contraseña y avisos de compra) salen

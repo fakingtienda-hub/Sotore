@@ -26,10 +26,16 @@ export default async function AdminSettingsPage() {
       <p className="mt-2 text-muted-foreground">
         Datos generales de la tienda, credenciales de pago y redes sociales.
       </p>
-      <SettingsForm initial={settings} />
-      <WompiSettingsForm initial={wompi} />
-      <EmailSettingsForm initial={email} usage={emailUsage} />
-      <ReconciliationPanel status={reconciliation} />
+      {/* En escritorio las tarjetas se reparten en dos columnas: apiladas
+          ocupaban 672px de un contenedor de ancho completo y dejaban media
+          pantalla vacía a la derecha. `items-start` mantiene cada tarjeta con
+          su altura natural para que no se estiren a la de su vecina. */}
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-2">
+        <SettingsForm initial={settings} />
+        <WompiSettingsForm initial={wompi} />
+        <EmailSettingsForm initial={email} usage={emailUsage} />
+        <ReconciliationPanel status={reconciliation} />
+      </div>
     </div>
   );
 }

@@ -64,7 +64,7 @@ export function WompiSettingsForm({ initial }: { initial: WompiSettingsAdmin }) 
   );
 
   return (
-    <div className="mt-6 max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
       <h2 className="font-display text-lg font-semibold">Credenciales de Wompi</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Se cifran en reposo (AES-256-GCM). Si dejas un secreto vacío se conserva el valor guardado
