@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
-import { buildWompiCheckoutFields, getWompiConfig } from "@/lib/server/wompi";
+import { buildWompiCheckoutFields, getWompiConfig, wompiCheckoutBlockReason } from "@/lib/server/wompi";
 import { ownerMatchesOrder } from "@/lib/server/order-ownership";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { expireOrderIfStale, expireStalePendingOrders } from "@/lib/server/order-expiry";
@@ -87,6 +87,15 @@ export async function POST(request: Request) {
     .limit(1);
 
   const config = await getWompiConfig();
+
+  // Red de seguridad antes de emitir el checkout: Wompi cobra según la LLAVE,
+  // no según el selector de entorno. Una llave de producción con el panel en
+  // "sandbox" cobraría dinero real a quien creía estar probando.
+  const blockReason = wompiCheckoutBlockReason(config);
+  if (blockReason) {
+    return Response.json({ configured: false, error: blockReason }, { status: 409 });
+  }
+
   if (!config.configured) {
     return Response.json({
       configured: false,

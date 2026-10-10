@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { decryptSecret, encryptSecret } from "@/lib/server/vault";
 import { WOMPI_SETTINGS_KEY } from "@/lib/server/wompi-settings";
+import { wompiKeyEnvironment, wompiSecretEnvironment } from "@/lib/server/wompi";
 import { EMAIL_SETTINGS_KEY, emailPolicyFrom, loadEmailSettings } from "@/lib/server/email-settings";
 import { DEFAULT_EMAIL_POLICY, getEmailUsage as readEmailUsage, type EmailUsage } from "@/lib/server/email-guard";
 import { sendEmail, wrapEmailLayout } from "@/lib/email/send";
@@ -127,12 +128,22 @@ export type WompiSettingsAdmin = {
   env: "sandbox" | "production";
   publicKey: string;
   publicKeyLast4: string;
+  /** Entorno que implica el prefijo de la llave guardada. `null` si no se reconoce. */
+  keyEnv: "sandbox" | "production" | null;
+  /** La llave guardada contradice el entorno seleccionado. */
+  envMismatch: boolean;
   configured: boolean;
   integritySecretSet: boolean;
   integritySecretLast4: string;
   eventsSecretSet: boolean;
   eventsSecretLast4: string;
+  /** Avisos de credenciales mezcladas entre entornos, o `null` si todo cuadra. */
+  credentialWarning: string | null;
 };
+
+function envLabel(e: "sandbox" | "production"): string {
+  return e === "production" ? "producción" : "pruebas";
+}
 
 export async function getWompiSettings(): Promise<WompiSettingsAdmin> {
   await requireAdmin();
@@ -150,11 +161,36 @@ export async function getWompiSettings(): Promise<WompiSettingsAdmin> {
   const eventsEnc = typeof stored.eventsSecret === "string" ? stored.eventsSecret : "";
   const integritySecret = integrityEnc ? decryptSecret(integrityEnc) : null;
   const eventsSecret = eventsEnc ? decryptSecret(eventsEnc) : null;
+  const keyEnv = wompiKeyEnvironment(publicKey);
+  const integrityEnv = integritySecret ? wompiSecretEnvironment(integritySecret) : null;
+  const eventsEnv = eventsSecret ? wompiSecretEnvironment(eventsSecret) : null;
+
+  // Wompi no mezcla credenciales entre ambientes: avisar aquí evita que el
+  // checkout falle (firma inválida) o que los webhooks no se puedan verificar.
+  const warnings: string[] = [];
+  if (keyEnv && keyEnv !== env) {
+    warnings.push(`La llave pública es de ${envLabel(keyEnv)} pero el entorno seleccionado es ${envLabel(env)}.`);
+  }
+  if (keyEnv && integrityEnv && integrityEnv !== keyEnv) {
+    warnings.push(
+      `El secreto de integridad es de ${envLabel(integrityEnv)} y la llave de ${envLabel(keyEnv)}: Wompi rechazaría la firma del checkout.`,
+    );
+  }
+  if (keyEnv && eventsEnv && eventsEnv !== keyEnv) {
+    warnings.push(
+      `El secreto de eventos es de ${envLabel(eventsEnv)} y la llave de ${envLabel(keyEnv)}: no se podrían verificar los webhooks.`,
+    );
+  }
+  const credentialWarning =
+    warnings.length > 0 ? `${warnings.join(" ")} Usa las tres credenciales del mismo entorno.` : null;
 
   return {
     env,
     publicKey,
     publicKeyLast4: publicKey.slice(-4),
+    keyEnv,
+    envMismatch: keyEnv !== null && keyEnv !== env,
+    credentialWarning,
     configured: !!(publicKey && integritySecret),
     integritySecretSet: !!integritySecret,
     integritySecretLast4: integritySecret?.slice(-4) ?? "",
@@ -172,6 +208,48 @@ export async function saveWompiSettings(input: unknown): Promise<{ ok: boolean; 
   }
 
   const { env, publicKey, integritySecret, eventsSecret } = parsed.data;
+
+  // El entorno tiene que ser coherente con el prefijo de la llave. En Wompi el
+  // checkout cobra según la llave: guardar una `pub_prod_` con "sandbox" haría
+  // compras reales sin avisar.
+  const keyEnv = wompiKeyEnvironment(publicKey);
+  if (publicKey && keyEnv && keyEnv !== env) {
+    return {
+      ok: false,
+      error:
+        `La llave pública parece de ${keyEnv === "production" ? "producción (pub_prod_)" : "pruebas (pub_test_)"} ` +
+        `pero el entorno seleccionado es ${env === "production" ? "producción" : "sandbox"}. ` +
+        "Deben coincidir: con la llave equivocada el checkout cobra en el entorno que no esperas.",
+    };
+  }
+
+  // Wompi no mezcla credenciales entre ambientes: una llave `pub_test_` con un
+  // integrity secret `prod_…` produce una firma que la pasarela rechaza, y un
+  // events secret del entorno equivocado deja los webhooks sin verificar.
+  if (keyEnv) {
+    if (integritySecret) {
+      const secEnv = wompiSecretEnvironment(integritySecret);
+      if (secEnv && secEnv !== keyEnv) {
+        return {
+          ok: false,
+          error:
+            `El secreto de integridad parece de ${envLabel(secEnv)} pero la llave pública es de ${envLabel(keyEnv)}. ` +
+            "Wompi rechazaría la firma del checkout; usa las credenciales del mismo entorno.",
+        };
+      }
+    }
+    if (eventsSecret) {
+      const evtEnv = wompiSecretEnvironment(eventsSecret);
+      if (evtEnv && evtEnv !== keyEnv) {
+        return {
+          ok: false,
+          error:
+            `El secreto de eventos parece de ${envLabel(evtEnv)} pero la llave pública es de ${envLabel(keyEnv)}. ` +
+            "Los webhooks no se podrían verificar; usa las credenciales del mismo entorno.",
+        };
+      }
+    }
+  }
 
   const [row] = await db
     .select()

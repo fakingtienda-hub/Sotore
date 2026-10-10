@@ -14,6 +14,34 @@ const fieldClass = "block text-xs font-medium text-muted-foreground";
 const btnClass =
   "mt-6 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50";
 
+/**
+ * El prefijo de la llave es lo que decide si Wompi cobra dinero real
+ * (`pub_prod_`) o de pruebas (`pub_test_`): el selector de entorno no lo cambia.
+ * Este detector local avisa en cuanto se pega una llave que no cuadra.
+ */
+function detectKeyEnv(key: string): "sandbox" | "production" | null {
+  const k = key.trim().toLowerCase();
+  if (k.startsWith("pub_test")) return "sandbox";
+  if (k.startsWith("pub_prod")) return "production";
+  return null;
+}
+
+function envLabel(e: "sandbox" | "production"): string {
+  return e === "production" ? "producción" : "pruebas";
+}
+
+/**
+ * Secreto de Wompi (integridad o eventos): `test_…` es de pruebas y `prod_…` de
+ * producción. Mezclar entornos hace que la firma del checkout falle o que los
+ * webhooks no se puedan verificar.
+ */
+function detectSecretEnv(secret: string): "sandbox" | "production" | null {
+  const s = secret.trim().toLowerCase();
+  if (s.startsWith("test_")) return "sandbox";
+  if (s.startsWith("prod_")) return "production";
+  return null;
+}
+
 export function WompiSettingsForm({ initial }: { initial: WompiSettingsAdmin }) {
   const [state, setState] = useState(initial);
   const [env, setEnv] = useState(initial.env);
@@ -22,6 +50,24 @@ export function WompiSettingsForm({ initial }: { initial: WompiSettingsAdmin }) 
   const [eventsSecret, setEventsSecret] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const detectedKeyEnv = detectKeyEnv(publicKey);
+  const keyMismatch = detectedKeyEnv !== null && detectedKeyEnv !== env;
+
+  const referenceEnv = detectedKeyEnv ?? env;
+  const secretWarnings: string[] = [];
+  const integrityEnvTyped = detectSecretEnv(integritySecret);
+  if (integrityEnvTyped && integrityEnvTyped !== referenceEnv) {
+    secretWarnings.push(
+      `El secreto de integridad es de ${envLabel(integrityEnvTyped)} pero el resto de credenciales son de ${envLabel(referenceEnv)}.`,
+    );
+  }
+  const eventsEnvTyped = detectSecretEnv(eventsSecret);
+  if (eventsEnvTyped && eventsEnvTyped !== referenceEnv) {
+    secretWarnings.push(
+      `El secreto de eventos es de ${envLabel(eventsEnvTyped)} pero el resto de credenciales son de ${envLabel(referenceEnv)}.`,
+    );
+  }
 
   async function save() {
     setSaving(true);
@@ -71,6 +117,12 @@ export function WompiSettingsForm({ initial }: { initial: WompiSettingsAdmin }) 
         anteriormente; los secretos nunca se muestran completos.
       </p>
 
+      {state.credentialWarning && (
+        <p className="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {state.credentialWarning}
+        </p>
+      )}
+
       <div className="mt-5 space-y-4">
         <label className="block">
           <span className={fieldClass}>Entorno</span>
@@ -89,7 +141,20 @@ export function WompiSettingsForm({ initial }: { initial: WompiSettingsAdmin }) 
             placeholder={state.publicKey ? state.publicKey : "pub_test_…"}
             className={inputClass}
           />
+          {detectedKeyEnv && (
+            <span className={`mt-1 block text-xs ${keyMismatch ? "text-red-600" : "text-muted-foreground"}`}>
+              {keyMismatch
+                ? `Esta llave es de ${envLabel(detectedKeyEnv)}; no coincide con el entorno seleccionado (${envLabel(env)}).`
+                : `Llave de ${envLabel(detectedKeyEnv)} detectada.`}
+            </span>
+          )}
         </label>
+
+        {secretWarnings.length > 0 && (
+          <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {secretWarnings.join(" ")} Wompi no mezcla credenciales entre ambientes.
+          </p>
+        )}
 
         {secretField("Llave de integridad (integrity secret)", integritySecret, setIntegritySecret, state.integritySecretLast4, state.integritySecretSet)}
         {secretField("Secreto de eventos (events secret)", eventsSecret, setEventsSecret, state.eventsSecretLast4, state.eventsSecretSet)}

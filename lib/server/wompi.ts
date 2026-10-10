@@ -8,25 +8,124 @@ export type WompiConfig = {
   publicKey: string;
   integritySecret: string;
   eventsSecret: string;
+  /** Entorno DECLARADO por el admin (selector del panel / WOMPI_ENV). */
   env: "sandbox" | "production";
+  /** Entorno que IMPLICA el prefijo de `publicKey`. `null` si no es reconocible. */
+  keyEnv: "sandbox" | "production" | null;
+  /** Entorno que IMPLICA el prefijo del integrity secret. `null` si no se reconoce. */
+  integrityEnv: "sandbox" | "production" | null;
+  /** Entorno que IMPLICA el prefijo del events secret. `null` si no se reconoce. */
+  eventsEnv: "sandbox" | "production" | null;
+  /** La llave contradice el entorno declarado. */
+  envMismatch: boolean;
   apiUrl: string;
   checkoutUrl: string;
 };
 
+/**
+ * Entorno que implica una llave pública de Wompi por su prefijo.
+ *
+ * En Wompi el sandbox y la producción comparten el MISMO checkout
+ * (`checkout.wompi.co/p/`): lo que decide si se cobra dinero real es la llave
+ * (`pub_test_` → pruebas, `pub_prod_` → producción), no el selector de entorno
+ * ni el panel de Wompi. Por eso hay que derivar el entorno de la llave y no
+ * fiarse solo de lo que el admin eligió.
+ */
+export function wompiKeyEnvironment(publicKey: string): "sandbox" | "production" | null {
+  const key = publicKey.trim().toLowerCase();
+  if (key.startsWith("pub_test")) return "sandbox";
+  if (key.startsWith("pub_prod")) return "production";
+  return null;
+}
+
+/**
+ * Entorno que implica un SECRETO de Wompi (integridad o eventos) por su
+ * prefijo: `test_…` → pruebas, `prod_…` → producción. Wompi lo advierte en su
+ * documentación: las credenciales NO se mezclan entre ambientes. Una llave
+ * `pub_test_` con un integrity secret `prod_…` produce una firma que la
+ * pasarela rechaza, así que conviene detectarlo antes de abrir el checkout.
+ * `null` si el prefijo no es reconocible (no se asume nada).
+ */
+export function wompiSecretEnvironment(secret: string): "sandbox" | "production" | null {
+  const s = secret.trim().toLowerCase();
+  if (s.startsWith("test_")) return "sandbox";
+  if (s.startsWith("prod_")) return "production";
+  return null;
+}
+
+/**
+ * Motivo por el que NO se debe lanzar el checkout, o `null` si la config está
+ * coherente. Se extrae como función pura para poder verificar la regla sin
+ * tocar la pasarela.
+ *
+ * Sin este guard, una llave `pub_prod_` guardada con el panel en «sandbox» cobra
+ * dinero REAL a quien creía estar probando — exactamente el incidente que este
+ * chequeo previene.
+ */
+export function wompiCheckoutBlockReason(
+  config: Pick<
+    WompiConfig,
+    "configured" | "env" | "keyEnv" | "integrityEnv" | "envMismatch"
+  >,
+): string | null {
+  const envLabel = (e: "sandbox" | "production") => (e === "production" ? "producción" : "pruebas");
+
+  // 1) La llave contradice el entorno declarado. Caso peligroso: el panel dice
+  //    "sandbox" pero la llave es de producción → cobra dinero real.
+  if (config.configured && config.envMismatch && config.keyEnv) {
+    const consequence =
+      config.keyEnv === "production"
+        ? "Se bloqueó el pago para no cobrar dinero real creyendo que era una prueba."
+        : "Se bloqueó el pago porque un cobro real sería rechazado por la pasarela.";
+    const prefix = config.keyEnv === "production" ? "pub_prod_" : "pub_test_";
+    return (
+      `La llave pública de Wompi es de ${envLabel(config.keyEnv)} (${prefix}) pero el entorno configurado es ` +
+      `${envLabel(config.env)}. ${consequence} Corrige las credenciales en Administración → Ajustes → Wompi.`
+    );
+  }
+
+  // 2) La llave y el integrity secret son de entornos distintos: la firma que
+  //    se calcula aquí no validaría en Wompi y el checkout fallaría igual.
+  if (config.configured && config.keyEnv && config.integrityEnv && config.integrityEnv !== config.keyEnv) {
+    return (
+      `La llave pública es de ${envLabel(config.keyEnv)} pero el secreto de integridad es de ` +
+      `${envLabel(config.integrityEnv)}. Wompi rechazaría la firma del checkout. ` +
+      "Usa las tres credenciales del mismo entorno (llave, integridad y eventos) en Administración → Ajustes → Wompi."
+    );
+  }
+
+  return null;
+}
+
 export async function getWompiConfig(): Promise<WompiConfig> {
   const stored = await loadWompiSettings();
-  const env = stored.env;
+  const declaredEnv = stored.env;
   const publicKey = stored.publicKey;
   const integritySecret = stored.integritySecret;
   const eventsSecret = stored.eventsSecret;
-  const apiUrl = serverEnv.wompiApiUrl || (env === "production" ? "https://production.wompi.co/v1" : "https://sandbox.wompi.co/v1");
+  // El prefijo de la llave manda sobre el entorno declarado: es lo que Wompi
+  // usa de verdad para decidir si el cobro es real. Si la llave es reconocible,
+  // la API de transacciones se apunta a su entorno (leer con la llave
+  // equivocada devolvía vacío y la reconciliación no confirmaba nada).
+  const keyEnv = wompiKeyEnvironment(publicKey);
+  const integrityEnv = wompiSecretEnvironment(integritySecret);
+  const eventsEnv = wompiSecretEnvironment(eventsSecret);
+  const effectiveEnv = keyEnv ?? integrityEnv ?? declaredEnv;
+  const envMismatch = keyEnv !== null && keyEnv !== declaredEnv;
+  const apiUrl =
+    serverEnv.wompiApiUrl ||
+    (effectiveEnv === "production" ? "https://production.wompi.co/v1" : "https://sandbox.wompi.co/v1");
   const checkoutUrl = "https://checkout.wompi.co/p/";
   return {
     configured: !!(publicKey && integritySecret && eventsSecret),
     publicKey,
     integritySecret,
     eventsSecret,
-    env,
+    env: declaredEnv,
+    keyEnv,
+    integrityEnv,
+    eventsEnv,
+    envMismatch,
     apiUrl,
     checkoutUrl,
   };

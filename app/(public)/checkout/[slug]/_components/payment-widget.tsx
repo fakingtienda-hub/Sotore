@@ -11,6 +11,8 @@ type InitResponse = {
   orderCode?: string;
   total?: number;
   currency?: string;
+  /** Motivo por el que no se puede cobrar (p. ej. llave y entorno incoherentes). */
+  error?: string;
   checkout?: { action: string; fields: { name: string; value: string }[]; redirectUrl: string };
 };
 
@@ -102,6 +104,18 @@ export function PaymentWidget({
     return (
       <div className="sf-card mt-4 p-4 text-center text-sm text-[var(--sf-muted)]">
         Preparando el pago…
+      </div>
+    );
+  }
+
+  // Error explícito de la pasarela (p. ej. credenciales incoherentes): se
+  // muestra el motivo en vez del panel de "no configurada" con el botón demo,
+  // que aquí confundiría al comprador sobre por qué no puede pagar.
+  if (data.error && !data.checkout) {
+    return (
+      <div className="sf-card mt-4 p-5 text-left">
+        <p className="font-semibold text-[var(--sf-paper)]">Pago no disponible</p>
+        <p className="sf-muted mt-1 text-sm leading-relaxed">{data.error}</p>
       </div>
     );
   }
