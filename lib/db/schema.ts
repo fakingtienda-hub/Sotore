@@ -375,6 +375,43 @@ export const events = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Registro de correos salientes
+// ---------------------------------------------------------------------------
+
+/** Bitácora de cada intento de envío (enviado, omitido o fallido).
+ *
+ *  Existe porque el plan Free de Mailgun son 100 correos al día: sin un
+ *  registro local no hay forma de saber cuántos se llevan gastados, ni de
+ *  evitar duplicados, ni de auditar (Mailgun Free solo retiene logs 1 día).
+ *  La escribe `lib/server/email-guard.ts`; nunca se borra por rendimiento
+ *  porque el volumen es de decenas de filas al día. */
+export const emailLog = pgTable(
+  "email_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** Tipo de correo (`order_approved`, `magic_link`, `password_reset`, `test`). */
+    kind: varchar("kind", { length: 40 }).notNull(),
+    /** `critical` (nunca se omite por cuota) | `manual` | `bulk`. */
+    priority: varchar("priority", { length: 16 }).notNull(),
+    recipient: varchar("recipient", { length: 255 }).notNull(),
+    /** `sent` | `skipped_quota` | `skipped_duplicate` | `skipped_rate_limit` | `failed`. */
+    status: varchar("status", { length: 24 }).notNull(),
+    /** Proveedor real que atendió el envío (`console` en desarrollo). */
+    provider: varchar("provider", { length: 16 }).notNull().default(""),
+    /** Clave de idempotencia: un segundo envío con la misma clave no se repite. */
+    dedupeKey: varchar("dedupe_key", { length: 200 }),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    error: varchar("error", { length: 500 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("email_log_created_idx").on(t.createdAt),
+    index("email_log_dedupe_idx").on(t.dedupeKey),
+    index("email_log_recipient_idx").on(t.recipient),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 
@@ -440,4 +477,6 @@ export type NewCoupon = typeof coupons.$inferInsert;
 export type Category = typeof categories.$inferSelect;
 export type LandingBlock = typeof landingBlocks.$inferSelect;
 export type StoreSetting = typeof storeSettings.$inferSelect;
+export type EmailLog = typeof emailLog.$inferSelect;
+export type NewEmailLog = typeof emailLog.$inferInsert;
 export type AnalyticsEvent = typeof events.$inferSelect;

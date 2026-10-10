@@ -4,10 +4,12 @@ import { useState } from "react";
 
 import {
   getEmailSettings,
+  getEmailUsage,
   saveEmailSettings,
   sendTestEmail,
   type EmailSettingsAdmin,
 } from "@/lib/server/actions/settings";
+import type { EmailUsage } from "@/lib/server/email-guard";
 
 const inputClass =
   "mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
@@ -19,8 +21,36 @@ const btnGhost =
 
 const MAILGUN_HOST = "smtp.mailgun.org";
 
-export function EmailSettingsForm({ initial }: { initial: EmailSettingsAdmin }) {
+const KIND_LABEL: Record<string, string> = {
+  order_approved: "Pedido aprobado",
+  magic_link: "Acceso (magic link)",
+  password_reset: "Reseteo de contraseña",
+  test: "Prueba",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: "En vuelo",
+  sent: "Enviado",
+  failed: "Falló",
+  skipped_quota: "Omitido · cuota",
+  skipped_duplicate: "Omitido · duplicado",
+  skipped_rate_limit: "Omitido · límite",
+  skipped_circuit: "Omitido · circuito",
+  skipped_guard_error: "Omitido · sin control",
+};
+
+const CHIP_RED = "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400";
+const CHIP_AMBER = "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400";
+
+export function EmailSettingsForm({
+  initial,
+  usage,
+}: {
+  initial: EmailSettingsAdmin;
+  usage: EmailUsage;
+}) {
   const [state, setState] = useState(initial);
+  const [usageState, setUsageState] = useState(usage);
   const [provider, setProvider] = useState<EmailSettingsAdmin["provider"]>(initial.provider);
   const [from, setFrom] = useState(initial.from);
   const [smtpHost, setSmtpHost] = useState(initial.smtpHost || MAILGUN_HOST);
@@ -31,6 +61,8 @@ export function EmailSettingsForm({ initial }: { initial: EmailSettingsAdmin }) 
   const [resendApiKey, setResendApiKey] = useState("");
   const [mailgunDomain, setMailgunDomain] = useState(initial.mailgunDomain);
   const [mailgunApiKey, setMailgunApiKey] = useState("");
+  const [dailyLimit, setDailyLimit] = useState(String(initial.dailyLimit));
+  const [criticalReserve, setCriticalReserve] = useState(String(initial.criticalReserve));
   const [smtpPasswordSet, setSmtpPasswordSet] = useState(initial.smtpPasswordSet);
   const [resendApiKeySet, setResendApiKeySet] = useState(initial.resendApiKeySet);
   const [mailgunApiKeySet, setMailgunApiKeySet] = useState(initial.mailgunApiKeySet);
@@ -68,11 +100,14 @@ export function EmailSettingsForm({ initial }: { initial: EmailSettingsAdmin }) 
       smtpSecure,
       smtpUser,
       smtpPassword: smtpPassword || undefined,
+      dailyLimit: Number(dailyLimit) || 0,
+      criticalReserve: Number(criticalReserve) || 0,
     });
     setSaving(false);
     if (res.ok) {
       const fresh = await getEmailSettings();
       setState(fresh);
+      setUsageState(await getEmailUsage());
       setSmtpPasswordSet(fresh.smtpPasswordSet);
       setResendApiKeySet(fresh.resendApiKeySet);
       setMailgunApiKeySet(fresh.mailgunApiKeySet);
@@ -90,12 +125,36 @@ export function EmailSettingsForm({ initial }: { initial: EmailSettingsAdmin }) 
     setMessage(null);
     const res = await sendTestEmail(testTo);
     setTesting(false);
+    setUsageState(await getEmailUsage());
     if (res.ok) {
       setMessage({ ok: true, text: `Correo de prueba enviado con "${res.provider}".` });
     } else {
       setMessage({ ok: false, text: res.error ?? "No se pudo enviar la prueba." });
     }
   }
+
+  const pct =
+    usageState.dailyLimit > 0
+      ? Math.min(100, Math.round((usageState.sentToday / usageState.dailyLimit) * 100))
+      : 0;
+  const barTone = pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-emerald-500";
+  const skipped = usageState.skippedToday;
+  const chips: Array<{ label: string; tone: string }> = [
+    ...(usageState.circuitOpen
+      ? [{ label: "Circuito abierto (429)", tone: CHIP_RED }]
+      : []),
+    ...(usageState.failedToday > 0
+      ? [{ label: `${usageState.failedToday} fallidos`, tone: CHIP_RED }]
+      : []),
+    ...(skipped.duplicate > 0
+      ? [{ label: `${skipped.duplicate} duplicados evitados`, tone: CHIP_AMBER }]
+      : []),
+    ...(skipped.rate_limit > 0
+      ? [{ label: `${skipped.rate_limit} por límite`, tone: CHIP_AMBER }]
+      : []),
+    ...(skipped.quota > 0 ? [{ label: `${skipped.quota} sin cuota`, tone: CHIP_RED }] : []),
+    ...(skipped.circuit > 0 ? [{ label: `${skipped.circuit} por circuito`, tone: CHIP_RED }] : []),
+  ];
 
   const secretField = (
     label: string,
@@ -272,9 +331,101 @@ export function EmailSettingsForm({ initial }: { initial: EmailSettingsAdmin }) 
       </div>
 
       <div className="mt-6 border-t border-border pt-5">
+        <h3 className="text-sm font-semibold">Presupuesto de correo de hoy</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Lo comparten todos los envíos. Al agotarse, el correo se omite y queda registrado aquí
+          en vez de que el proveedor lo rechace.
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="text-2xl font-semibold tabular-nums">
+              {usageState.sentToday}
+              <span className="text-base font-normal text-muted-foreground">
+                {" / "}
+                {usageState.dailyLimit}
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {usageState.criticalReserve > 0
+                ? `${usageState.criticalReserve} turnos reservados a correos críticos`
+                : "Sin reserva para correos críticos"}
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className={fieldClass}>Límite diario</span>
+              <input
+                type="number"
+                min={0}
+                value={dailyLimit}
+                onChange={(e) => setDailyLimit(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className="block">
+              <span className={fieldClass}>Reserva para críticos</span>
+              <input
+                type="number"
+                min={0}
+                value={criticalReserve}
+                onChange={(e) => setCriticalReserve(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+          <div className={`h-full rounded-full ${barTone}`} style={{ width: `${pct}%` }} />
+        </div>
+
+        {chips.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+            {chips.map((chip) => (
+              <span key={chip.label} className={`rounded-full px-2.5 py-0.5 font-medium ${chip.tone}`}>
+                {chip.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        {usageState.recent.length > 0 ? (
+          <div className="mt-4 overflow-hidden rounded-lg border border-border">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-secondary/50 text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Tipo</th>
+                  <th className="px-3 py-2 font-medium">Destinatario</th>
+                  <th className="px-3 py-2 font-medium">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usageState.recent.map((row) => (
+                  <tr key={row.id} className="border-t border-border">
+                    <td className="px-3 py-2">{KIND_LABEL[row.kind] ?? row.kind}</td>
+                    <td className="max-w-56 truncate px-3 py-2 text-muted-foreground">
+                      {row.recipient}
+                    </td>
+                    <td className="px-3 py-2">{STATUS_LABEL[row.status] ?? row.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Todavía no se ha registrado ningún correo.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-6 border-t border-border pt-5">
         <h3 className="text-sm font-semibold">Probar envío</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Guarda primero y luego envía un correo de prueba con la configuración activa.
+          Guarda primero y luego envía un correo de prueba con la configuración activa.{" "}
+          <strong>Consume presupuesto real</strong> salvo que el proveedor sea «Consola».
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="block min-w-64 flex-1">

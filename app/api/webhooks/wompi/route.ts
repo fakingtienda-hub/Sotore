@@ -44,6 +44,12 @@ async function sendApprovedEmail(order: schema.Order) {
   await sendEmail({
     to: user.email,
     subject: `Tu pedido ${order.code} fue aprobado`,
+    // La clave de idempotencia es lo que garantiza UN correo por compra: si el
+    // webhook reintenta (o la reconciliación vuelve a aprobar la orden), el
+    // guardia lo omite en vez de repetir el aviso al cliente.
+    kind: "order_approved",
+    dedupeKey: `order:${order.id}:approved`,
+    orderId: order.id,
     html: wrapEmailLayout(
       "¡Pago recibido!",
       `<p>Hola ${user.name ?? "comprador"}, tu pedido <strong>${order.code}</strong> fue aprobado y ya puedes descargar lo que compraste.</p>

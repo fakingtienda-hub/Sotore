@@ -9,7 +9,8 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { decryptSecret, encryptSecret } from "@/lib/server/vault";
 import { WOMPI_SETTINGS_KEY } from "@/lib/server/wompi-settings";
-import { EMAIL_SETTINGS_KEY, loadEmailSettings } from "@/lib/server/email-settings";
+import { EMAIL_SETTINGS_KEY, emailPolicyFrom, loadEmailSettings } from "@/lib/server/email-settings";
+import { DEFAULT_EMAIL_POLICY, getEmailUsage as readEmailUsage, type EmailUsage } from "@/lib/server/email-guard";
 import { sendEmail, wrapEmailLayout } from "@/lib/email/send";
 const SETTINGS_KEY = "general";
 
@@ -221,6 +222,9 @@ const emailSettingsSchema = z.object({
   smtpSecure: z.boolean().optional(),
   smtpUser: z.string().trim().max(255).optional(),
   smtpPassword: z.string().max(512).optional(),
+  // Presupuesto diario: el plan Free de Mailgun son 100 correos al día.
+  dailyLimit: z.coerce.number().int().min(0).max(100_000).optional(),
+  criticalReserve: z.coerce.number().int().min(0).max(100_000).optional(),
 });
 
 export type EmailSettingsAdmin = {
@@ -237,6 +241,10 @@ export type EmailSettingsAdmin = {
   smtpPasswordLast4: string;
   resendApiKeySet: boolean;
   resendApiKeyLast4: string;
+  /** Correos que el proveedor acepta al día. */
+  dailyLimit: number;
+  /** Turnos reservados a los correos críticos frente a los no críticos. */
+  criticalReserve: number;
   /** El proveedor elegido tiene lo mínimo para enviar. */
   configured: boolean;
 };
@@ -268,8 +276,20 @@ export async function getEmailSettings(): Promise<EmailSettingsAdmin> {
     smtpPasswordLast4: effective.smtpPassword.slice(-4),
     resendApiKeySet: !!effective.resendApiKey,
     resendApiKeyLast4: effective.resendApiKey.slice(-4),
+    dailyLimit: effective.dailyLimit,
+    criticalReserve: effective.criticalReserve,
     configured,
   };
+}
+
+/** Cuánto presupuesto de correo se gastó hoy y qué se omitió, para el panel.
+ *
+ *  Sin esta lectura el admin no puede saber si está a punto de agotar el plan
+ *  Free: Mailgun no expone un contador fiable y solo retiene logs un día. */
+export async function getEmailUsage(): Promise<EmailUsage> {
+  await requireAdmin();
+  const effective = await loadEmailSettings();
+  return readEmailUsage(emailPolicyFrom(effective));
 }
 
 export async function saveEmailSettings(input: unknown): Promise<{ ok: boolean; error?: string }> {
@@ -299,6 +319,13 @@ export async function saveEmailSettings(input: unknown): Promise<{ ok: boolean; 
   const smtpPort = d.smtpPort ?? 587;
   const smtpUser = d.smtpUser ?? "";
   const smtpSecure = d.smtpSecure ?? smtpPort === 465;
+  const dailyLimit = d.dailyLimit ?? DEFAULT_EMAIL_POLICY.dailyLimit;
+  const criticalReserve = d.criticalReserve ?? DEFAULT_EMAIL_POLICY.criticalReserve;
+
+  // Una reserva mayor que el límite dejaría el presupuesto sin turnos útiles.
+  if (criticalReserve > dailyLimit) {
+    return { ok: false, error: "La reserva para correos críticos no puede superar el límite diario." };
+  }
 
   // Coherencia por proveedor, evaluando lo que quedará guardado.
   if (d.provider === "smtp" && !smtpHost.trim()) {
@@ -328,6 +355,8 @@ export async function saveEmailSettings(input: unknown): Promise<{ ok: boolean; 
     smtpSecure,
     smtpUser,
     smtpPassword: encSmtp,
+    dailyLimit,
+    criticalReserve,
   };
 
   if (row) {
@@ -355,6 +384,7 @@ export async function sendTestEmail(
   try {
     const res = await sendEmail({
       to: parsed.data,
+      kind: "test",
       subject: "Prueba de configuración de correo",
       html: wrapEmailLayout(
         "Prueba de correo",

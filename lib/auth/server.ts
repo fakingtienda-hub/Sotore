@@ -71,6 +71,7 @@ function createAuth() {
       sendResetPassword: async ({ user, url }) => {
         await sendEmail({
           to: user.email,
+          kind: "password_reset",
           subject: "Restablece tu contraseña",
           html: wrapEmailLayout(
             "Restablece tu contraseña",
@@ -97,6 +98,7 @@ function createAuth() {
         sendMagicLink: async ({ email, url }) => {
           await sendEmail({
             to: email,
+            kind: "magic_link",
             subject: "Tu acceso a Fakingstore",
             html: wrapEmailLayout(
               "Accede a tu biblioteca",

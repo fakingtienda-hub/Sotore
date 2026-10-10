@@ -1,14 +1,43 @@
 import nodemailer from "nodemailer";
 
-import { loadEmailSettings, type StoredEmailSettings } from "@/lib/server/email-settings";
+import {
+  emailPolicyFrom,
+  loadEmailSettings,
+  type StoredEmailSettings,
+} from "@/lib/server/email-settings";
+import {
+  openEmailCircuit,
+  priorityOf,
+  reserveEmail,
+  settleEmail,
+  type EmailKind,
+  type SkipReason,
+} from "@/lib/server/email-guard";
 
-type Email = {
+/** Correo ya maquetado, sin metadatos de control: es lo que necesitan los
+ *  transportes para hablar con el proveedor. */
+type RenderedEmail = {
   to: string;
   subject: string;
   html: string;
 };
 
-type SendResult = { ok: boolean; provider: string };
+type Email = RenderedEmail & {
+  /** Obligatorio a propósito: un correo sin clasificar es un correo cuya
+   *  prioridad frente a la cuota diaria nadie decidió. */
+  kind: EmailKind;
+  /** Clave de idempotencia: un segundo envío con la misma no se repite. */
+  dedupeKey?: string;
+  /** Orden relacionada, para poder auditar el correo desde la venta. */
+  orderId?: string;
+};
+
+type SendResult = {
+  ok: boolean;
+  provider: string;
+  /** Motivo de la omisión. Ausente = el proveedor lo aceptó. */
+  skipped?: SkipReason;
+};
 
 export function wrapEmailLayout(title: string, bodyHtml: string): string {
   return `
@@ -49,7 +78,10 @@ export function wrapEmailLayout(title: string, bodyHtml: string): string {
  * no cachear credenciales obsoletas si el admin cambia la config en caliente.
  * Puerto 465 = TLS implícito (`secure`); 587/25 usan STARTTLS.
  */
-async function sendViaSmtp(settings: StoredEmailSettings, email: Email): Promise<SendResult> {
+async function sendViaSmtp(
+  settings: StoredEmailSettings,
+  email: RenderedEmail,
+): Promise<SendResult> {
   if (!settings.smtpHost) {
     throw new Error("SMTP sin configurar: falta el host (p. ej. smtp.mailgun.org).");
   }
@@ -86,7 +118,7 @@ async function sendViaSmtp(settings: StoredEmailSettings, email: Email): Promise
  */
 async function sendViaMailgun(
   settings: StoredEmailSettings,
-  email: Email,
+  email: RenderedEmail,
 ): Promise<SendResult> {
   if (!settings.mailgunDomain) {
     throw new Error("Mailgun sin configurar: falta el dominio verificado.");
@@ -110,15 +142,18 @@ async function sendViaMailgun(
     body: params.toString(),
   });
   if (!res.ok) {
+    // 429 = cuota diaria agotada. Se abre el circuito para que los correos
+    // siguientes no sigan golpeando una API que ya nos está rechazando.
+    if (res.status === 429) openEmailCircuit();
     const detail = (await res.text().catch(() => "")).slice(0, 300);
     throw new Error(`Mailgun API devolvió ${res.status}: ${detail}`);
   }
   return { ok: true, provider: "mailgun" };
 }
 
-export async function sendEmail(email: Email): Promise<SendResult> {
+/** Habla con el proveedor. No toca la bitácora: de eso se encarga `sendEmail`. */
+async function deliver(settings: StoredEmailSettings, email: Email): Promise<SendResult> {
   const { to, subject, html } = email;
-  const settings = await loadEmailSettings();
 
   if (settings.provider === "mailgun") {
     return sendViaMailgun(settings, { to, subject, html });
@@ -141,6 +176,7 @@ export async function sendEmail(email: Email): Promise<SendResult> {
       body: JSON.stringify({ from: settings.from, to, subject, html }),
     });
     if (!res.ok) {
+      if (res.status === 429) openEmailCircuit();
       throw new Error(`Resend failed with status ${res.status}`);
     }
     return { ok: true, provider: "resend" };
@@ -151,4 +187,53 @@ export async function sendEmail(email: Email): Promise<SendResult> {
   console.log(`[email:console] provider=console`);
   console.log(`[email:console] htmlLength=${html.length}`);
   return { ok: true, provider: "console" };
+}
+
+/**
+ * ÚNICO punto de envío. Todo correo pasa antes por `reserveEmail`, que decide si
+ * hay presupuesto y deja la fila en `email_log`; luego se cierra esa fila con el
+ * resultado real. Así las reglas de cuota y deduplicación no dependen de que
+ * cada call site se acuerde de aplicarlas.
+ *
+ * Devuelve `{ ok: false, skipped }` (sin lanzar) cuando el guardia decide no
+ * enviar: omitir un correo es una decisión de negocio, no un error.
+ */
+export async function sendEmail(email: Email): Promise<SendResult> {
+  const settings = await loadEmailSettings();
+  const policy = emailPolicyFrom(settings);
+  const priority = priorityOf(email.kind);
+
+  let logId: string | null = null;
+  try {
+    const decision = await reserveEmail({
+      kind: email.kind,
+      to: email.to,
+      provider: settings.provider,
+      policy,
+      dedupeKey: email.dedupeKey,
+      orderId: email.orderId,
+    });
+    if (decision.action === "skip") {
+      return { ok: false, provider: settings.provider, skipped: decision.reason };
+    }
+    logId = decision.logId;
+  } catch {
+    // El guardia no puede proteger la cuota si su propia BD falla. Se favorece
+    // al correo que el cliente está esperando (una compra no puede depender de
+    // una tabla de auditoría) y se retiene todo lo demás, para no enviar sin
+    // tope justo cuando no hay control.
+    if (priority !== "critical") {
+      return { ok: false, provider: settings.provider, skipped: "guard_error" };
+    }
+  }
+
+  try {
+    const result = await deliver(settings, email);
+    if (logId) await settleEmail(logId, { ok: true, provider: result.provider });
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error al enviar el correo.";
+    if (logId) await settleEmail(logId, { ok: false, provider: settings.provider, error: message });
+    throw error;
+  }
 }

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
+import { DEFAULT_EMAIL_POLICY, type EmailPolicy } from "@/lib/server/email-guard";
 import { decryptSecret } from "@/lib/server/vault";
 import { serverEnv } from "@/lib/serverEnv";
 
@@ -22,6 +23,10 @@ export type StoredEmailSettings = {
   smtpSecure: boolean;
   smtpUser: string;
   smtpPassword: string;
+  /** Presupuesto diario de correo (plan Free de Mailgun = 100). */
+  dailyLimit: number;
+  /** Turnos que se reservan a los correos críticos frente a los no críticos. */
+  criticalReserve: number;
 };
 
 /**
@@ -38,6 +43,19 @@ export function defaultSmtpSecure(port: number): boolean {
   return port === 465;
 }
 
+/** Traduce la configuración efectiva al presupuesto que aplica el guardia.
+ *
+ *  Vive aquí para que el envío y el panel usen exactamente la misma política:
+ *  si el panel mostrara un límite distinto al que aplica el guardia, el aviso
+ *  de cuota sería inútil. */
+export function emailPolicyFrom(settings: StoredEmailSettings): EmailPolicy {
+  return {
+    ...DEFAULT_EMAIL_POLICY,
+    dailyLimit: settings.dailyLimit,
+    criticalReserve: settings.criticalReserve,
+  };
+}
+
 export async function loadEmailSettings(): Promise<StoredEmailSettings> {
   const out: StoredEmailSettings = {
     provider: serverEnv.emailProvider,
@@ -51,6 +69,8 @@ export async function loadEmailSettings(): Promise<StoredEmailSettings> {
     smtpSecure: serverEnv.emailSmtpSecure,
     smtpUser: serverEnv.emailSmtpUser,
     smtpPassword: serverEnv.emailSmtpPassword,
+    dailyLimit: serverEnv.emailDailyLimit,
+    criticalReserve: serverEnv.emailCriticalReserve,
   };
 
   try {
@@ -91,6 +111,17 @@ export async function loadEmailSettings(): Promise<StoredEmailSettings> {
       if (typeof v.smtpPassword === "string") {
         const dec = decryptSecret(v.smtpPassword);
         if (dec) out.smtpPassword = dec;
+      }
+      if (typeof v.dailyLimit === "number" && Number.isInteger(v.dailyLimit) && v.dailyLimit >= 0) {
+        out.dailyLimit = v.dailyLimit;
+      }
+      if (
+        typeof v.criticalReserve === "number" &&
+        Number.isInteger(v.criticalReserve) &&
+        v.criticalReserve >= 0 &&
+        v.criticalReserve <= out.dailyLimit
+      ) {
+        out.criticalReserve = v.criticalReserve;
       }
     }
   } catch {

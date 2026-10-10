@@ -7,9 +7,13 @@ export type ServerEnv = {
   databaseUrl: string;
   databasePoolMax: number;
   authSecret: string;
-  emailProvider: "console" | "resend" | "smtp";
+  emailProvider: "console" | "resend" | "smtp" | "mailgun";
   emailApiKey: string;
   emailFrom: string;
+  /** Correos que el proveedor acepta al día (Free de Mailgun = 100). */
+  emailDailyLimit: number;
+  /** Turnos reservados a los correos críticos frente a los no críticos. */
+  emailCriticalReserve: number;
   emailSmtpHost: string;
   emailSmtpPort: number;
   emailSmtpSecure: boolean;
@@ -128,6 +132,10 @@ function buildServerEnv(): ServerEnv {
     emailProvider: optional("EMAIL_PROVIDER", "console") as ServerEnv["emailProvider"],
     emailApiKey: optional("EMAIL_API_KEY", ""),
     emailFrom: optional("EMAIL_FROM", "Fakingstore <hola@fakingstore.com>"),
+    // Presupuesto diario de correo. El panel `/admin/settings` puede ajustarlo;
+    // estas variables son el respaldo y el valor por defecto.
+    emailDailyLimit: Number(optional("EMAIL_DAILY_LIMIT", "100")),
+    emailCriticalReserve: Number(optional("EMAIL_CRITICAL_RESERVE", "20")),
     // SMTP (Mailgun u otro relay). El panel `/admin/settings` los sobreescribe
     // desde la BD; aquí quedan como respaldo por variables de entorno.
     emailSmtpHost: optional("EMAIL_SMTP_HOST", ""),
