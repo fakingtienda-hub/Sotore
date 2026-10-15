@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { ensureOrderEntitlements } from "@/lib/server/entitlements";
-import { expireStalePendingOrders } from "@/lib/server/order-expiry";
+import { ORDER_EXPIRY_MS, expireStalePendingOrders } from "@/lib/server/order-expiry";
 import {
   approveOrderFromTransaction,
   markOrderTerminalFromTransaction,
@@ -15,6 +15,7 @@ import {
   type WompiTransactionLike,
 } from "@/lib/server/order-approval";
 import { UNDELIVERED_SCAN_DAYS } from "@/lib/server/order-anomalies";
+import { sendOrderApprovedEmail } from "@/lib/server/order-notifications";
 import {
   fetchWompiTransaction,
   fetchWompiTransactionsSince,
@@ -47,8 +48,17 @@ import {
 const PAYMENT_LOOKBACK_HOURS = 72;
 /** Tope de órdenes por corrida, para no martillar la base ni la API. */
 const MAX_ORDERS_PER_RUN = 200;
-/** Antigüedad máxima de una orden para consultarla a demanda (nivel 3). */
-const ON_DEMAND_LOOKUP_MAX_MS = 60 * 60 * 1000;
+/**
+ * Antigüedad máxima de una orden para consultarla a demanda (nivel 3).
+ *
+ * Se ata a la vida de la orden (`ORDER_EXPIRY_MS` = 24 h): mientras la orden
+ * pueda seguir `pending` (y por tanto cobrada pero sin confirmar), el comprador
+ * que vuelva a la página de resultado debe poder forzar la consulta. El tope
+ * anterior de 1 h dejaba una ventana muerta de 23 h en la que el pago existía,
+ * la orden seguía pendiente y la app se negaba a preguntarle a Wompi. El coste
+ * está acotado: el endpoint exige la cookie de titularidad y va tras rate limit.
+ */
+const ON_DEMAND_LOOKUP_MAX_MS = ORDER_EXPIRY_MS;
 
 /**
  * Techo de UNA consulta en el camino caliente del comprador.
@@ -142,6 +152,10 @@ async function repairUndeliveredOrders(): Promise<{
     if (result.ok && result.granted > 0) {
       repaired.push(order.code);
       grantsRecovered += result.granted;
+      // El correo de aprobación también se envía aquí: esta orden se aprobó sin
+      // entregar (o su primer aviso se perdió), así que sin esto el comprador
+      // tendría el producto pero ningún correo. La `dedupeKey` evita repetirlo.
+      await sendOrderApprovedEmail(order).catch(() => {});
     }
   }
 
@@ -177,11 +191,12 @@ function toTransaction(t: WompiTransactionResponse): WompiTransactionLike {
  *
  * `transactionId` es el id que Wompi añade al `redirect-url` (`?id=…`) y con el
  * que el comprador vuelve a la app. Es la vía RÁPIDA: consultar por id funciona
- * con la llave pública (`GET /transactions/{id}` → 200), mientras que el
- * listado necesita permisos que esta llave no tiene (401). Sin este parámetro,
- * una orden sin `gatewayReference` (el caso del pago recién hecho, antes de que
- * llegue el webhook) solo podía intentar el listado, fallaba siempre y el
- * comprador se quedaba en «Confirmando…» hasta agotar los sondeos.
+ * con la llave pública (`GET /transactions/{id}` → 200). El listado (el otro
+ * camino, para órdenes sin `gatewayReference`) exige la LLAVE PRIVADA: con solo
+ * la pública responde 401. Sin `transactionId` ni llave privada, una orden sin
+ * `gatewayReference` (el pago recién hecho, antes de que llegue el webhook) no
+ * se puede resolver en el sondeo y el comprador espera a que confirme el webhook
+ * o el cron.
  *
  * Devuelve el estado de la orden tras el intento, o `null` si no se pudo
  * resolver (Wompi sin configurar o fallo de la API).
@@ -229,7 +244,7 @@ export async function confirmOrderWithWompi(
   // UN solo viaje de red por sondeo. El listado solo se intenta cuando no hubo
   // id en absoluto: si el id existió y la consulta falló, volver a listar aquí
   // añadiría un segundo viaje de red a cada sondeo sin poder confirmar nada
-  // (el listado, además, exige permisos que la llave pública no tiene: 401).
+  // (y el listado exige la llave privada: con solo la pública responde 401).
   if (!tx && !directId) {
     const listed = await fetchWompiTransactionsSince(config, order.createdAt);
     // Solo se empareja por `reference`: el estado se decide abajo, porque un
@@ -314,7 +329,7 @@ async function recoverMissedPayments(): Promise<ReconcileReport["payments"]> {
     listed = await fetchWompiTransactionsSince(config, lookbackFrom);
     if (listed.length === 0) {
       listingNote =
-        "El listado de transacciones de Wompi no devolvió datos (¿endpoint o ventana no disponibles en tu cuenta?). Las órdenes con gatewayReference se resuelven igualmente por id.";
+        "El listado de transacciones de Wompi no devolvió datos (¿endpoint, ventana o llave privada no disponibles en tu cuenta?). Sin llave privada el listado responde 401. Las órdenes con gatewayReference se resuelven igualmente por id.";
     }
   }
   const byReference = new Map<string, WompiTransactionResponse>();
@@ -344,6 +359,10 @@ async function recoverMissedPayments(): Promise<ReconcileReport["payments"]> {
       if (wasExpired) expiredRecovered.push(order.code);
       else approved.push(order.code);
       if (!result.deliveryOk) deliveryFailures.push(order.code);
+      // Pago recuperado sin webhook: nadie envió el aviso. Se manda solo si la
+      // entrega salió bien (si falló, el correo diría «ya puedes descargar»
+      // cuando todavía no puede).
+      if (result.deliveryOk) await sendOrderApprovedEmail(order).catch(() => {});
     } else if (result.outcome === "amount_mismatch") {
       // Sospechoso: la orden dice una cosa y el cobro otra. Se registra pero NO
       // se entrega — requiere revisión manual.

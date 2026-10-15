@@ -5,6 +5,7 @@ import {
   normalizeWompiSecret,
   wompiCheckoutBlockReason,
   wompiKeyEnvironment,
+  wompiPrivateKeyEnvironment,
   wompiSecretEnvironment,
   wompiSecretWarnings,
   type WompiConfig,
@@ -29,13 +30,15 @@ function derive(
   declaredEnv: "sandbox" | "production",
   publicKey: string,
   integritySecret = "",
-): Pick<WompiConfig, "configured" | "env" | "keyEnv" | "integrityEnv" | "envMismatch"> {
+  eventsSecret = "",
+): Pick<WompiConfig, "configured" | "env" | "keyEnv" | "integrityEnv" | "eventsEnv" | "envMismatch"> {
   const keyEnv = wompiKeyEnvironment(publicKey);
   return {
     configured: true,
     env: declaredEnv,
     keyEnv,
     integrityEnv: integritySecret ? wompiSecretEnvironment(integritySecret) : null,
+    eventsEnv: eventsSecret ? wompiSecretEnvironment(eventsSecret) : null,
     envMismatch: keyEnv !== null && keyEnv !== declaredEnv,
   };
 }
@@ -49,6 +52,14 @@ function main() {
   assert("llave privada (no pública) → null", wompiKeyEnvironment("prv_test_123") === null);
   assert("vacío → null", wompiKeyEnvironment("") === null);
   assert("formato desconocido → null", wompiKeyEnvironment("abc123") === null);
+
+  console.log("\n== Detección de entorno: llave privada ==");
+  assert("prv_test_ → sandbox", wompiPrivateKeyEnvironment("prv_test_abc") === "sandbox");
+  assert("prv_prod_ → production", wompiPrivateKeyEnvironment("prv_prod_abc") === "production");
+  assert("mayúsculas → sandbox", wompiPrivateKeyEnvironment("PRV_TEST_ABC") === "sandbox");
+  assert("llave pública (no privada) → null", wompiPrivateKeyEnvironment("pub_test_abc") === null);
+  assert("vacío → null", wompiPrivateKeyEnvironment("") === null);
+  assert("formato desconocido → null", wompiPrivateKeyEnvironment("abc123") === null);
 
   console.log("\n== Detección de entorno: secretos ==");
   assert("test_integrity_ → sandbox", wompiSecretEnvironment("test_integrity_abc") === "sandbox");
@@ -91,6 +102,15 @@ function main() {
     mixedReason ?? "",
   );
 
+  const mixedEvents = derive("sandbox", "pub_test_KEY", "", "prod_events_SEC");
+  const mixedEventsReason = wompiCheckoutBlockReason(mixedEvents);
+  assert("llave de pruebas + eventos de producción BLOQUEA", mixedEventsReason !== null);
+  assert(
+    "el motivo explica que los webhooks no se verificarían",
+    !!mixedEventsReason && mixedEventsReason.includes("webhooks"),
+    mixedEventsReason ?? "",
+  );
+
   assert("sandbox coherente NO bloquea", wompiCheckoutBlockReason(derive("sandbox", "pub_test_a")) === null);
   assert(
     "producción coherente NO bloquea",
@@ -98,7 +118,11 @@ function main() {
   );
   assert(
     "credenciales coherentes con secretos NO bloquea",
-    wompiCheckoutBlockReason(derive("sandbox", "pub_test_a", "test_integrity_b")) === null,
+    wompiCheckoutBlockReason(derive("sandbox", "pub_test_a", "test_integrity_b", "test_events_c")) === null,
+  );
+  assert(
+    "events secret sin prefijo NO bloquea (no se asume nada)",
+    wompiCheckoutBlockReason(derive("sandbox", "pub_test_a", "test_integrity_b", "sin_prefijo")) === null,
   );
   assert("llave no reconocible NO bloquea", wompiCheckoutBlockReason(derive("sandbox", "abc")) === null);
   assert(
@@ -112,6 +136,7 @@ function main() {
       env: "sandbox",
       keyEnv: "production",
       integrityEnv: "production",
+      eventsEnv: "production",
       envMismatch: true,
     }) === null,
   );

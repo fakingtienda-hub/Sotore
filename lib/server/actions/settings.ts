@@ -12,6 +12,7 @@ import { WOMPI_SETTINGS_KEY } from "@/lib/server/wompi-settings";
 import {
   normalizeWompiSecret,
   wompiKeyEnvironment,
+  wompiPrivateKeyEnvironment,
   wompiSecretEnvironment,
   wompiSecretWarnings,
 } from "@/lib/server/wompi";
@@ -130,6 +131,9 @@ const wompiSettingsSchema = z.object({
   // así que se guarda ya recortado (vacío = conservar el anterior).
   integritySecret: z.string().trim().max(512).optional(),
   eventsSecret: z.string().trim().max(512).optional(),
+  // Llave privada de comercio (`prv_…`): no firma el checkout ni se expone al
+  // navegador; solo autoriza el LISTADO de transacciones de la reconciliación.
+  privateKey: z.string().trim().max(512).optional(),
 });
 
 export type WompiSettingsAdmin = {
@@ -145,6 +149,11 @@ export type WompiSettingsAdmin = {
   integritySecretLast4: string;
   eventsSecretSet: boolean;
   eventsSecretLast4: string;
+  /** Llave privada (`prv_…`) guardada, para la reconciliación. */
+  privateKeySet: boolean;
+  privateKeyLast4: string;
+  /** Entorno que implica el prefijo de la llave privada. `null` si no se reconoce. */
+  privateKeyEnv: "sandbox" | "production" | null;
   /** Avisos de credenciales mezcladas entre entornos, o `null` si todo cuadra. */
   credentialWarning: string | null;
 };
@@ -167,11 +176,14 @@ export async function getWompiSettings(): Promise<WompiSettingsAdmin> {
   const publicKey = typeof stored.publicKey === "string" ? stored.publicKey.trim() : "";
   const integrityEnc = typeof stored.integritySecret === "string" ? stored.integritySecret : "";
   const eventsEnc = typeof stored.eventsSecret === "string" ? stored.eventsSecret : "";
+  const privateEnc = typeof stored.privateKey === "string" ? stored.privateKey : "";
   const integritySecret = integrityEnc ? normalizeWompiSecret(decryptSecret(integrityEnc) ?? "") : null;
   const eventsSecret = eventsEnc ? normalizeWompiSecret(decryptSecret(eventsEnc) ?? "") : null;
+  const privateKey = privateEnc ? normalizeWompiSecret(decryptSecret(privateEnc) ?? "") : null;
   const keyEnv = wompiKeyEnvironment(publicKey);
   const integrityEnv = integritySecret ? wompiSecretEnvironment(integritySecret) : null;
   const eventsEnv = eventsSecret ? wompiSecretEnvironment(eventsSecret) : null;
+  const privateKeyEnv = privateKey ? wompiPrivateKeyEnvironment(privateKey) : null;
 
   // Wompi no mezcla credenciales entre ambientes: avisar aquí evita que el
   // checkout falle (firma inválida) o que los webhooks no se puedan verificar.
@@ -187,6 +199,11 @@ export async function getWompiSettings(): Promise<WompiSettingsAdmin> {
   if (keyEnv && eventsEnv && eventsEnv !== keyEnv) {
     warnings.push(
       `El secreto de eventos es de ${envLabel(eventsEnv)} y la llave de ${envLabel(keyEnv)}: no se podrían verificar los webhooks.`,
+    );
+  }
+  if (keyEnv && privateKeyEnv && privateKeyEnv !== keyEnv) {
+    warnings.push(
+      `La llave privada es de ${envLabel(privateKeyEnv)} y la pública de ${envLabel(keyEnv)}: la reconciliación no podría listar transacciones.`,
     );
   }
   // Causas típicas de «signature: La firma es inválida» que el prefijo de
@@ -205,11 +222,19 @@ export async function getWompiSettings(): Promise<WompiSettingsAdmin> {
     keyEnv,
     envMismatch: keyEnv !== null && keyEnv !== env,
     credentialWarning,
-    configured: !!(publicKey && integritySecret),
+    // Misma regla que `getWompiConfig().configured`: el checkout necesita llave,
+    // integridad Y eventos. Antes el panel decía "configurado" sin el events
+    // secret, mientras el runtime se negaba a cobrar por considerarlo sin
+    // configurar. La llave privada NO entra aquí (es opcional, solo para la
+    // reconciliación).
+    configured: !!(publicKey && integritySecret && eventsSecret),
     integritySecretSet: !!integritySecret,
     integritySecretLast4: integritySecret?.slice(-4) ?? "",
     eventsSecretSet: !!eventsSecret,
     eventsSecretLast4: eventsSecret?.slice(-4) ?? "",
+    privateKeySet: !!privateKey,
+    privateKeyLast4: privateKey?.slice(-4) ?? "",
+    privateKeyEnv,
   };
 }
 
@@ -221,7 +246,7 @@ export async function saveWompiSettings(input: unknown): Promise<{ ok: boolean; 
     return { ok: false, error: parsed.error.issues.map((e) => e.message).join("; ") };
   }
 
-  const { env, publicKey, integritySecret, eventsSecret } = parsed.data;
+  const { env, publicKey, integritySecret, eventsSecret, privateKey } = parsed.data;
 
   // El entorno tiene que ser coherente con el prefijo de la llave. En Wompi el
   // checkout cobra según la llave: guardar una `pub_prod_` con "sandbox" haría
@@ -263,6 +288,17 @@ export async function saveWompiSettings(input: unknown): Promise<{ ok: boolean; 
         };
       }
     }
+    if (privateKey) {
+      const prvEnv = wompiPrivateKeyEnvironment(privateKey);
+      if (prvEnv && prvEnv !== keyEnv) {
+        return {
+          ok: false,
+          error:
+            `La llave privada parece de ${envLabel(prvEnv)} pero la llave pública es de ${envLabel(keyEnv)}. ` +
+            "La reconciliación no podría listar transacciones; usa las credenciales del mismo entorno.",
+        };
+      }
+    }
   }
 
   const [row] = await db
@@ -283,8 +319,19 @@ export async function saveWompiSettings(input: unknown): Promise<{ ok: boolean; 
     : typeof stored.eventsSecret === "string"
       ? stored.eventsSecret
       : "";
+  const nextPrivate = privateKey
+    ? encryptSecret(privateKey)
+    : typeof stored.privateKey === "string"
+      ? stored.privateKey
+      : "";
 
-  const value = { env, publicKey, integritySecret: nextIntegrity, eventsSecret: nextEvents };
+  const value = {
+    env,
+    publicKey,
+    integritySecret: nextIntegrity,
+    eventsSecret: nextEvents,
+    privateKey: nextPrivate,
+  };
 
   if (row) {
     await db

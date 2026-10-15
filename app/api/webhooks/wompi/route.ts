@@ -9,9 +9,14 @@ import {
   approveOrderFromTransaction,
   markOrderTerminalFromTransaction,
 } from "@/lib/server/order-approval";
-import { getWompiConfig, verifyWompiEventChecksum, type WompiEventPayload } from "@/lib/server/wompi";
+import {
+  getWompiConfig,
+  safeChecksumEqual,
+  verifyWompiEventChecksum,
+  type WompiEventPayload,
+} from "@/lib/server/wompi";
 import { expireStalePendingOrders } from "@/lib/server/order-expiry";
-import { wrapEmailLayout, sendEmail } from "@/lib/email/send";
+import { sendOrderApprovedEmail } from "@/lib/server/order-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -27,40 +32,6 @@ type WompiTransaction = {
   created_at?: string;
   [key: string]: unknown;
 };
-
-async function sendApprovedEmail(order: schema.Order) {
-  const [user] = await db
-    .select({ name: schema.users.name, email: schema.users.email })
-    .from(schema.users)
-    .where(eq(schema.users.id, order.userId))
-    .limit(1);
-  if (!user) return;
-
-  const items = await db
-    .select({ title: schema.orderItems.productTitleSnapshot })
-    .from(schema.orderItems)
-    .where(eq(schema.orderItems.orderId, order.id));
-  const listHtml = items
-    .map((i) => `<li style="margin:4px 0;">${i.title}</li>`)
-    .join("");
-
-  await sendEmail({
-    to: user.email,
-    subject: `Tu pedido ${order.code} fue aprobado`,
-    // La clave de idempotencia es lo que garantiza UN correo por compra: si el
-    // webhook reintenta (o la reconciliación vuelve a aprobar la orden), el
-    // guardia lo omite en vez de repetir el aviso al cliente.
-    kind: "order_approved",
-    dedupeKey: `order:${order.id}:approved`,
-    orderId: order.id,
-    html: wrapEmailLayout(
-      "¡Pago recibido!",
-      `<p>Hola ${user.name ?? "comprador"}, tu pedido <strong>${order.code}</strong> fue aprobado y ya puedes descargar lo que compraste.</p>
-       <ul style="padding-left:18px;">${listHtml}</ul>
-       <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/library" style="display:inline-block;padding:12px 20px;background:#a83a1e;color:#fff;border-radius:6px;text-decoration:none;">Ir a mi biblioteca</a></p>`,
-    ),
-  });
-}
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
@@ -88,7 +59,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Firma del webhook inválida." }, { status: 401 });
   }
 
-  if (signature.checksum && headerChecksum && signature.checksum.toLowerCase() !== headerChecksum.toLowerCase()) {
+  if (signature.checksum && headerChecksum && !safeChecksumEqual(signature.checksum, headerChecksum)) {
     return Response.json({ error: "Firma del webhook inválida." }, { status: 401 });
   }
 
@@ -128,10 +99,21 @@ export async function POST(request: Request) {
     // idempotencia) vive en `approveOrderFromTransaction`, el mismo módulo que
     // usa la reconciliación: así un pago confirmado por evento y uno confirmado
     // por consulta a la API se tratan igual.
-    const result = await approveOrderFromTransaction(order, {
-      ...transaction,
-      status,
-    });
+    //
+    // `allowExpiredRecovery`: el barrido de caducidad corre JUSTO ANTES (línea
+    // anterior) y puede haber vencido esta orden. Sin recuperar `expired` aquí,
+    // un APPROVED verificado que llega tarde (el comprador pagó en el último
+    // instante del plazo) se ignoraba y el pago quedaba sin entregar hasta que
+    // corriera el cron. El evento está firmado y pasa la validación de
+    // monto/moneda, así que reclamar una orden vencida es seguro.
+    const result = await approveOrderFromTransaction(
+      order,
+      {
+        ...transaction,
+        status,
+      },
+      { allowExpiredRecovery: true },
+    );
 
     if (result.outcome === "amount_mismatch") {
       return Response.json({ ok: true, ignored: "monto o moneda no coinciden con la orden" });
@@ -146,13 +128,22 @@ export async function POST(request: Request) {
           { status: 500 },
         );
       }
-      await sendApprovedEmail(order).catch(() => {});
+      await sendOrderApprovedEmail(order).catch(() => {});
       revalidatePath("/library");
       revalidatePath("/admin/sales");
       return Response.json({ ok: true, granted: result.granted });
     }
 
     if (result.outcome === "already_approved") {
+      // La orden ya estaba aprobada (reintento del webhook, o la aprobó la
+      // reconciliación). Si la entrega de ESTE intento falló, el correo también
+      // se omite para no avisar de algo que aún no está listo; el reintento de
+      // Wompi o el cron volverán a pasar por aquí. Si la entrega está bien, se
+      // (re)envía: la `dedupeKey` lo deja en un único correo por compra, y así
+      // se cubre el caso de una aprobación previa cuyo primer envío se perdió.
+      if (result.deliveryOk) {
+        await sendOrderApprovedEmail(order).catch(() => {});
+      }
       return Response.json({
         ok: true,
         granted: result.granted,

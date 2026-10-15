@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 import { loadWompiSettings } from "@/lib/server/wompi-settings";
 import { serverEnv } from "@/lib/serverEnv";
@@ -6,6 +6,10 @@ import { serverEnv } from "@/lib/serverEnv";
 export type WompiConfig = {
   configured: boolean;
   publicKey: string;
+  /** Llave PRIVADA de comercio (`prv_…`). Opcional. No se usa en el checkout ni
+   *  se expone al navegador: solo autentica lecturas server-to-server (listado
+   *  de transacciones en la reconciliación). */
+  privateKey: string;
   integritySecret: string;
   eventsSecret: string;
   /** Entorno DECLARADO por el admin (selector del panel / WOMPI_ENV). */
@@ -54,6 +58,18 @@ export function wompiSecretEnvironment(secret: string): "sandbox" | "production"
 }
 
 /**
+ * Entorno que implica la LLAVE PRIVADA de Wompi por su prefijo:
+ * `prv_test_…` → pruebas, `prv_prod_…` → producción. Igual que las demás
+ * credenciales, no se mezcla entre ambientes. `null` si no se reconoce.
+ */
+export function wompiPrivateKeyEnvironment(privateKey: string): "sandbox" | "production" | null {
+  const k = privateKey.trim().toLowerCase();
+  if (k.startsWith("prv_test")) return "sandbox";
+  if (k.startsWith("prv_prod")) return "production";
+  return null;
+}
+
+/**
  * Motivo por el que NO se debe lanzar el checkout, o `null` si la config está
  * coherente. Se extrae como función pura para poder verificar la regla sin
  * tocar la pasarela.
@@ -65,7 +81,7 @@ export function wompiSecretEnvironment(secret: string): "sandbox" | "production"
 export function wompiCheckoutBlockReason(
   config: Pick<
     WompiConfig,
-    "configured" | "env" | "keyEnv" | "integrityEnv" | "envMismatch"
+    "configured" | "env" | "keyEnv" | "integrityEnv" | "eventsEnv" | "envMismatch"
   >,
 ): string | null {
   const envLabel = (e: "sandbox" | "production") => (e === "production" ? "producción" : "pruebas");
@@ -90,6 +106,17 @@ export function wompiCheckoutBlockReason(
     return (
       `La llave pública es de ${envLabel(config.keyEnv)} pero el secreto de integridad es de ` +
       `${envLabel(config.integrityEnv)}. Wompi rechazaría la firma del checkout. ` +
+      "Usa las tres credenciales del mismo entorno (llave, integridad y eventos) en Administración → Ajustes → Wompi."
+    );
+  }
+
+  // 3) El events secret es de otro entorno: el checkout se abriría, pero el
+  //    webhook no podría verificar NINGUNA confirmación y las compras quedarían
+  //    pendientes para siempre. Mejor bloquear antes de cobrar.
+  if (config.configured && config.keyEnv && config.eventsEnv && config.eventsEnv !== config.keyEnv) {
+    return (
+      `La llave pública es de ${envLabel(config.keyEnv)} pero el secreto de eventos es de ` +
+      `${envLabel(config.eventsEnv)}. No se podrían verificar los webhooks y las compras quedarían sin confirmar. ` +
       "Usa las tres credenciales del mismo entorno (llave, integridad y eventos) en Administración → Ajustes → Wompi."
     );
   }
@@ -152,6 +179,7 @@ export async function getWompiConfig(): Promise<WompiConfig> {
   // lo que derive de estas credenciales (detección de entorno, hash de firma,
   // lectura de transacciones) trabaje con el valor limpio.
   const publicKey = normalizeWompiSecret(stored.publicKey);
+  const privateKey = normalizeWompiSecret(stored.privateKey);
   const integritySecret = normalizeWompiSecret(stored.integritySecret);
   const eventsSecret = normalizeWompiSecret(stored.eventsSecret);
   // El prefijo de la llave manda sobre el entorno declarado: es lo que Wompi
@@ -170,6 +198,7 @@ export async function getWompiConfig(): Promise<WompiConfig> {
   return {
     configured: !!(publicKey && integritySecret && eventsSecret),
     publicKey,
+    privateKey,
     integritySecret,
     eventsSecret,
     env: declaredEnv,
@@ -280,12 +309,12 @@ export type WompiTransactionResponse = {
 async function wompiGet(
   config: WompiConfig,
   path: string,
-  timeoutMs = 15_000,
+  opts: { key?: string; timeoutMs?: number } = {},
 ): Promise<unknown> {
   const res = await fetch(`${config.apiUrl}${path}`, {
-    headers: { Authorization: `Bearer ${config.publicKey}` },
+    headers: { Authorization: `Bearer ${opts.key ?? config.publicKey}` },
     cache: "no-store",
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 15_000),
   });
   if (!res.ok) throw new Error(`Wompi ${path} respondió ${res.status}`);
   return res.json();
@@ -298,6 +327,8 @@ async function wompiGet(
  * de estado no puede quedarse colgado el techo de 15 s (se han observado
  * resoluciones DNS de 11 s hacia el dominio de Wompi), porque mientras dura el
  * navegador no tiene respuesta y no programa el siguiente sondeo.
+ *
+ * Este endpoint SÍ funciona con la llave pública (`GET /transactions/{id}`).
  */
 export async function fetchWompiTransaction(
   config: WompiConfig,
@@ -308,7 +339,7 @@ export async function fetchWompiTransaction(
     const body = (await wompiGet(
       config,
       `/transactions/${encodeURIComponent(transactionId)}`,
-      timeoutMs,
+      { timeoutMs },
     )) as {
       data?: WompiTransactionResponse;
     };
@@ -327,10 +358,10 @@ export async function fetchWompiTransaction(
  * timestamps Unix, y Wompi respondía 422 → la lista salía SIEMPRE vacía y la
  * confirmación a demanda no encontraba nunca el pago.
  *
- * Esta consulta necesita permisos de lectura del comercio. Con la llave
- * PÚBLICA (`pub_test_`/`pub_prod_`), Wompi responde 401 (comprobado contra
- * sandbox); hoy el camino fiable es consultar por id (`fetchWompiTransaction`),
- * que sí funciona con la llave pública.
+ * Para el LISTADO se usa la LLAVE PRIVADA si está configurada: es el único
+ * camino fiable (con la llave PÚBLICA Wompi responde 401, comprobado contra
+ * sandbox). Sin llave privada se intenta con la pública como último recurso,
+ * pero entonces las órdenes sin `gatewayReference` no se pueden recuperar.
  */
 export async function fetchWompiTransactionsSince(
   config: WompiConfig,
@@ -343,7 +374,9 @@ export async function fetchWompiTransactionsSince(
     page_size: "200",
   });
   try {
-    const body = (await wompiGet(config, `/transactions?${params.toString()}`)) as {
+    const body = (await wompiGet(config, `/transactions?${params.toString()}`, {
+      key: config.privateKey || config.publicKey,
+    })) as {
       data?: WompiTransactionResponse[];
     };
     return Array.isArray(body?.data) ? body.data : [];
@@ -372,6 +405,20 @@ function resolvePath(obj: unknown, path: string): unknown {
  * `signature.checksum` del body o en el header `x-event-checksum`.
  * (The integrity signature del checkout es OTRA firma: `generateIntegritySignature`.)
  */
+/**
+ * Compara dos cadenas hex en tiempo constante. Comparar checksums con `===`
+ * filtra, por el tiempo de respuesta, cuántos caracteres iniciales acertó quien
+ * prueba firmas a ciegas. `timingSafeEqual` exige el mismo número de bytes, así
+ * que se compara sobre la longitud de la esperada y se descarta un candidato de
+ * longitud distinta (un checksum de Wompi siempre tiene 64 caracteres hex).
+ */
+export function safeChecksumEqual(expected: string, candidate: string): boolean {
+  const a = Buffer.from(expected.toLowerCase(), "utf8");
+  const b = Buffer.from(candidate.toLowerCase(), "utf8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export function verifyWompiEventChecksum(
   payload: WompiEventPayload,
   eventsSecret: string,
@@ -384,7 +431,7 @@ export function verifyWompiEventChecksum(
   const candidate = checksumOverride ?? checksum;
   if (!candidate) return false;
 
-  if (checksum && checksumOverride && checksum.toLowerCase() !== checksumOverride.toLowerCase()) {
+  if (checksum && checksumOverride && !safeChecksumEqual(checksum, checksumOverride)) {
     return false;
   }
 
@@ -396,5 +443,5 @@ export function verifyWompiEventChecksum(
       })
       .join("") + String(payload.timestamp ?? "") + normalizeWompiSecret(eventsSecret);
   const expected = createHash("sha256").update(raw, "utf8").digest("hex");
-  return expected.toLowerCase() === candidate.toLowerCase();
+  return safeChecksumEqual(expected, candidate);
 }

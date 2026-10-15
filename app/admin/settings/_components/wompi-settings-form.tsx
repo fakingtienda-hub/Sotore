@@ -42,12 +42,21 @@ function detectSecretEnv(secret: string): "sandbox" | "production" | null {
   return null;
 }
 
+/** La llave privada (`prv_test_` / `prv_prod_`) también está atada a un entorno. */
+function detectPrivateKeyEnv(key: string): "sandbox" | "production" | null {
+  const k = key.trim().toLowerCase();
+  if (k.startsWith("prv_test")) return "sandbox";
+  if (k.startsWith("prv_prod")) return "production";
+  return null;
+}
+
 export function WompiSettingsForm({ initial }: { initial: WompiSettingsAdmin }) {
   const [state, setState] = useState(initial);
   const [env, setEnv] = useState(initial.env);
   const [publicKey, setPublicKey] = useState(initial.publicKey);
   const [integritySecret, setIntegritySecret] = useState("");
   const [eventsSecret, setEventsSecret] = useState("");
+  const [privateKey, setPrivateKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -68,6 +77,12 @@ export function WompiSettingsForm({ initial }: { initial: WompiSettingsAdmin }) 
       `El secreto de eventos es de ${envLabel(eventsEnvTyped)} pero el resto de credenciales son de ${envLabel(referenceEnv)}.`,
     );
   }
+  const privateKeyEnvTyped = detectPrivateKeyEnv(privateKey);
+  if (privateKeyEnvTyped && privateKeyEnvTyped !== referenceEnv) {
+    secretWarnings.push(
+      `La llave privada es de ${envLabel(privateKeyEnvTyped)} pero el resto de credenciales son de ${envLabel(referenceEnv)}.`,
+    );
+  }
 
   async function save() {
     setSaving(true);
@@ -77,12 +92,14 @@ export function WompiSettingsForm({ initial }: { initial: WompiSettingsAdmin }) 
       publicKey,
       integritySecret: integritySecret || undefined,
       eventsSecret: eventsSecret || undefined,
+      privateKey: privateKey || undefined,
     });
     setSaving(false);
     if (res.ok) {
       setState(await getWompiSettings());
       setIntegritySecret("");
       setEventsSecret("");
+      setPrivateKey("");
       setMessage({ ok: true, text: "Credenciales guardadas y cifradas." });
     } else {
       setMessage({ ok: false, text: res.error ?? "No se pudo guardar." });
@@ -158,6 +175,13 @@ export function WompiSettingsForm({ initial }: { initial: WompiSettingsAdmin }) 
 
         {secretField("Llave de integridad (integrity secret)", integritySecret, setIntegritySecret, state.integritySecretLast4, state.integritySecretSet)}
         {secretField("Secreto de eventos (events secret)", eventsSecret, setEventsSecret, state.eventsSecretLast4, state.eventsSecretSet)}
+        {secretField("Llave privada (private key, opcional)", privateKey, setPrivateKey, state.privateKeyLast4, state.privateKeySet)}
+        <p className="text-xs text-muted-foreground">
+          La llave privada (<code>prv_…</code>) solo la usa la reconciliación para <em>listar</em>{" "}
+          transacciones y recuperar pagos cuyo webhook se perdió por completo. Sin ella, esas órdenes
+          solo se pueden recuperar si ya se conoce el id de la transacción. No se usa para el checkout
+          ni se expone al navegador.
+        </p>
       </div>
 
       <div className="mt-6 flex items-center gap-3">

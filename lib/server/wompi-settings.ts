@@ -8,6 +8,7 @@ import { serverEnv } from "@/lib/serverEnv";
 export type StoredWompiSettings = {
   env: "sandbox" | "production";
   publicKey: string;
+  privateKey: string;
   integritySecret: string;
   eventsSecret: string;
 };
@@ -23,6 +24,7 @@ export const WOMPI_SETTINGS_KEY = "wompi";
 export async function loadWompiSettings(): Promise<StoredWompiSettings> {
   let env: "sandbox" | "production" = serverEnv.wompiEnv;
   let publicKey = serverEnv.wompiPublicKey;
+  let privateKey = serverEnv.wompiPrivateKey;
   let integritySecret = serverEnv.wompiIntegritySecret;
   let eventsSecret = serverEnv.wompiEventsSecret;
 
@@ -37,6 +39,11 @@ export async function loadWompiSettings(): Promise<StoredWompiSettings> {
       const v = row.value as Record<string, unknown>;
       if (v.env === "sandbox" || v.env === "production") env = v.env;
       if (typeof v.publicKey === "string" && v.publicKey.trim()) publicKey = v.publicKey.trim();
+      // La llave privada también se cifra en reposo y se recorta al leer.
+      if (typeof v.privateKey === "string") {
+        const dec = decryptSecret(v.privateKey);
+        if (dec) privateKey = dec.trim();
+      }
       // Los secretos se recortan aquí también: los valores guardados con
       // versiones anteriores del panel (sin `.trim()`) pueden arrastrar
       // espacios, y en la firma eso basta para que Wompi la rechace.
@@ -53,5 +60,5 @@ export async function loadWompiSettings(): Promise<StoredWompiSettings> {
     // Sin acceso a BD o fila inválida: se queda con las variables de entorno.
   }
 
-  return { env, publicKey, integritySecret, eventsSecret };
+  return { env, publicKey, privateKey, integritySecret, eventsSecret };
 }

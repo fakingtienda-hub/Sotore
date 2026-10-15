@@ -313,6 +313,19 @@ async function main() {
     `L: sin id y con listado 401 la orden sigue pending sin reventar (dio ${statusL})`,
     statusL === "pending",
   );
+
+  /* --- Caso M: monto AUSENTE no aprueba (fail-closed) --------------------- */
+  // Si la pasarela no reporta el monto no hay nada que verificar contra la
+  // orden: aprobar a ciegas permitiría dar el producto sin comprobar el cobro.
+  const codeM = `FS-VER${STAMP}-M`;
+  sinkTxId = `tx-${STAMP}-m`;
+  await createOrder({ code: codeM, total });
+  sinkReference = codeM;
+  txStatus = "APPROVED";
+  txAmount = null;
+  const statusM = await confirmOrderWithWompi(codeM, sinkTxId);
+  assert(`M: un APPROVED sin monto NO aprueba (dio ${statusM})`, statusM === "pending");
+  assert("M: la orden sigue pendiente en la base", (await statusOf(codeM)) === "pending");
 }
 
 // Sin top-level await: `tsx` emite este script como CJS.

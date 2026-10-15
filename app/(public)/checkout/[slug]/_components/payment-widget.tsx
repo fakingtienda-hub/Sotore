@@ -13,6 +13,8 @@ type InitResponse = {
   currency?: string;
   /** Motivo por el que no se puede cobrar (p. ej. llave y entorno incoherentes). */
   error?: string;
+  /** La orden no requería pago (total 0) y ya quedó aprobada y entregada. */
+  paid?: boolean;
   checkout?: { action: string; fields: { name: string; value: string }[]; redirectUrl: string };
 };
 
@@ -36,6 +38,8 @@ export function PaymentWidget({
   const [demoState, setDemoState] = useState<"idle" | "busy" | "done">("idle");
   const [demoError, setDemoError] = useState<string | null>(null);
   const [demoAccessUrl, setDemoAccessUrl] = useState<string | null>(null);
+  /** Orden de total 0: el init la aprueba y entrega sin abrir Wompi. */
+  const [freePaid, setFreePaid] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(autoSubmitSec ?? null);
   const [leaving, setLeaving] = useState(false);
 
@@ -48,7 +52,18 @@ export function PaymentWidget({
     })
       .then((res) => res.json())
       .then((json) => {
-        if (!cancelled) setData(json);
+        if (cancelled) return;
+        setData(json);
+        if (json.paid) {
+          setFreePaid(true);
+          getLibraryAccessUrl(orderCode)
+            .then((r) => {
+              if (!cancelled) setDemoAccessUrl(r.ok ? r.url : "/library");
+            })
+            .catch(() => {
+              if (!cancelled) setDemoAccessUrl("/library");
+            });
+        }
       })
       .catch(() => {
         if (!cancelled) setLoadError("No se pudo iniciar el pago.");
@@ -120,20 +135,23 @@ export function PaymentWidget({
     );
   }
 
-  if (demoState === "done") {
+  if (demoState === "done" || freePaid) {
+    const isDemo = demoState === "done";
     return (
       <div className="sf-card mt-6 p-6 text-center md:p-8">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--sf-thread)] text-xl font-bold text-[var(--sf-tag-ink)]">
           ✓
         </div>
         <p className="sf-label mt-5 inline-block rounded-full border border-[var(--sf-line-strong)] px-3 py-1">
-          Pago aprobado · modo demo
+          {isDemo ? "Pago aprobado · modo demo" : "Compra confirmada"}
         </p>
         <h3 className="sf-title mx-auto mt-4 max-w-md text-3xl text-[var(--sf-paper)]">
-          ¡Listo, pago recibido!
+          ¡Listo, acceso activado!
         </h3>
         <p className="sf-muted mx-auto mt-2 max-w-sm text-[15px] leading-relaxed">
-          Tu orden quedó marcada como pagada y el acceso quedó activado de inmediato.
+          {isDemo
+            ? "Tu orden quedó marcada como pagada y el acceso quedó activado de inmediato."
+            : "Tu cupón cubrió el total de la compra y el acceso quedó activado de inmediato."}
         </p>
         <div className="mt-7 flex justify-center">
           <a href={demoAccessUrl ?? "/library"} className="sf-btn w-full sm:w-auto">

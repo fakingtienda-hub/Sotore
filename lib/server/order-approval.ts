@@ -14,9 +14,10 @@ import { claimCouponForApprovedOrder } from "@/lib/server/coupon-usage";
  * mismas validaciones que uno confirmado por evento. Si alguna vez se añade una
  * vía de confirmación, debe pasar por aquí.
  *
- * La reconciliación puede entregar órdenes `expired` (un APPROVED verificado
- * que llegó tarde). NO se permite reviving otros estados terminales: una orden
- * `declined`/`voided`/`error` es un cierre, no un pago perdido.
+ * Tanto el webhook como la reconciliación pueden entregar órdenes `expired`
+ * (un APPROVED verificado que llegó tarde): pasan `allowExpiredRecovery`. NO se
+ * permite revivir otros estados terminales: una orden `declined`/`voided`/
+ * `error` es un cierre, no un pago perdido.
  */
 
 export type WompiTransactionLike = {
@@ -32,7 +33,7 @@ export type WompiTransactionLike = {
 export type ApprovalOutcome =
   | { outcome: "granted"; granted: number; existing: number; deliveryOk: boolean; reason?: string }
   | { outcome: "amount_mismatch" }
-  | { outcome: "already_approved"; granted: number; existing: number }
+  | { outcome: "already_approved"; granted: number; existing: number; deliveryOk: boolean }
   | { outcome: "ignored"; status: string | null };
 
 /** Estados terminales de una transacción de Wompi que cierran un intento sin aprobar. */
@@ -58,7 +59,8 @@ export const RETRYABLE_ORDER_STATUSES: readonly string[] = [
 
 /** Estados desde los que un APPROVED verificado puede reclamar la orden. */
 const CLAIMABLE: readonly string[] = [...RETRYABLE_ORDER_STATUSES];
-/** Añadiendo las órdenes caducadas: solo la reconciliación (nivel 2) las rescata. */
+/** Añadiendo las órdenes caducadas: las rescatan el webhook (APPROVED tardío) y
+ *  la reconciliación (nivel 2), pasando `allowExpiredRecovery`. */
 const RECOVERY_CLAIMABLE: readonly string[] = [...CLAIMABLE, "expired"];
 
 /**
@@ -87,9 +89,12 @@ export async function approveOrderFromTransaction(
   // Validar que el pago realmente corresponde a la orden (monto y moneda). El
   // reference del checkout no protege el monto (solo la firma de integridad lo
   // hace al crear el checkout), así que un APPROVED con otro monto NO debe
-  // aprobar la orden.
-  const amountOk = transaction.amount_in_cents == null || transaction.amount_in_cents === order.total;
-  const currencyOk = !transaction.currency || transaction.currency.toUpperCase() === order.currency.toUpperCase();
+  // aprobar la orden. Fail-closed: si la pasarela no reporta monto o moneda, no
+  // hay nada que verificar y NO se aprueba (antes un monto ausente pasaba como
+  // válido y podía aprobar una orden sin comprobar el cobro).
+  const amountOk = transaction.amount_in_cents != null && transaction.amount_in_cents === order.total;
+  const currencyOk =
+    !!transaction.currency && transaction.currency.toUpperCase() === order.currency.toUpperCase();
   if (!amountOk || !currencyOk) {
     await db
       .update(schema.orders)
@@ -150,7 +155,16 @@ export async function approveOrderFromTransaction(
   if (recheck?.status === "approved") {
     const delivered = await ensureOrderEntitlements(order.id);
     await claimCouponForApprovedOrder(order.id);
-    return { outcome: "already_approved", granted: delivered.granted, existing: delivered.existing };
+    // `deliveryOk` lo usa el webhook para decidir si (re)envía el correo de
+    // aprobación: si esta pasada acaba de reparar una entrega que había fallado,
+    // el comprador debe recibir el aviso; si la entrega ya estaba bien, la
+    // `dedupeKey` del correo evita repetirlo.
+    return {
+      outcome: "already_approved",
+      granted: delivered.granted,
+      existing: delivered.existing,
+      deliveryOk: delivered.ok,
+    };
   }
   return { outcome: "ignored", status: recheck?.status ?? null };
 }
@@ -191,4 +205,48 @@ export async function markOrderTerminalFromTransaction(
     .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "pending")))
     .returning({ id: schema.orders.id });
   return claimed.length > 0;
+}
+
+/**
+ * Aprueba una orden de total CERO (un cupón del 100% deja el total en 0). No hay
+ * cobro que validar contra la pasarela —Wompi rechaza un `amount-in-cents` de 0—
+ * así que la orden se cierra aquí y se entrega por el MISMO camino que una
+ * aprobación pagada (`ensureOrderEntitlements` + `claimCouponForApprovedOrder`).
+ *
+ * El claim es atómico sobre `pending`, de modo que el reintento o la
+ * reconciliación no vuelven a entregar. Idempotente: si ya estaba aprobada,
+ * repara la entrega sin reescribir nada.
+ */
+export async function approveZeroTotalOrder(
+  orderId: string,
+): Promise<{ ok: boolean; granted: number; existing: number }> {
+  const claimed = await db
+    .update(schema.orders)
+    .set({
+      gateway: "free",
+      gatewayStatus: "approved",
+      status: "approved",
+      paidAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(schema.orders.id, orderId), eq(schema.orders.status, "pending")))
+    .returning({ id: schema.orders.id });
+
+  if (claimed.length === 0) {
+    const [recheck] = await db
+      .select({ status: schema.orders.status })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, orderId))
+      .limit(1);
+    if (recheck?.status === "approved") {
+      const delivered = await ensureOrderEntitlements(orderId);
+      await claimCouponForApprovedOrder(orderId);
+      return { ok: delivered.ok, granted: delivered.granted, existing: delivered.existing };
+    }
+    return { ok: false, granted: 0, existing: 0 };
+  }
+
+  const delivered = await ensureOrderEntitlements(orderId);
+  await claimCouponForApprovedOrder(orderId);
+  return { ok: delivered.ok, granted: delivered.granted, existing: delivered.existing };
 }

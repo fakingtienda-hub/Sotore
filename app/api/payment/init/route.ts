@@ -4,6 +4,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { buildWompiCheckoutFields, getWompiConfig, wompiCheckoutBlockReason } from "@/lib/server/wompi";
+import { approveZeroTotalOrder } from "@/lib/server/order-approval";
+import { sendOrderApprovedEmail } from "@/lib/server/order-notifications";
 import { ownerMatchesOrder } from "@/lib/server/order-ownership";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { expireOrderIfStale, expireStalePendingOrders } from "@/lib/server/order-expiry";
@@ -73,6 +75,26 @@ export async function POST(request: Request) {
       { error: "La orden ya no está pendiente de pago.", status: "expired" },
       { status: 409 },
     );
+  }
+
+  // Total cero (cupón del 100%): no hay nada que cobrar. Wompi rechaza un
+  // `amount-in-cents` de 0, así que la orden se aprueba y entrega aquí mismo, sin
+  // abrir checkout. Va antes de mirar la config de Wompi: sin cobro, la pasarela
+  // no hace falta.
+  if (order.total <= 0) {
+    const result = await approveZeroTotalOrder(order.id);
+    // Sin cobro, el webhook nunca va a llegar: el aviso al comprador se manda
+    // aquí. La `dedupeKey` lo deja en un solo correo aunque se reintente.
+    await sendOrderApprovedEmail(order).catch(() => {});
+    return Response.json({
+      configured: true,
+      paid: true,
+      orderCode: order.code,
+      total: order.total,
+      currency: order.currency,
+      granted: result.granted,
+      existing: result.existing,
+    });
   }
 
   const [user] = await db

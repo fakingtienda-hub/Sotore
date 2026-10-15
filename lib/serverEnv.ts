@@ -33,6 +33,7 @@ export type ServerEnv = {
   signedUrlTtlSeconds: number;
   wompiEnv: "sandbox" | "production";
   wompiPublicKey: string;
+  wompiPrivateKey: string;
   wompiIntegritySecret: string;
   wompiEventsSecret: string;
   wompiApiUrl: string;
@@ -80,6 +81,7 @@ function buildServerEnv(): ServerEnv {
   // de Vercel) pueden traer un salto de línea al final. En una firma el secreto
   // es parte literal del hash, así que un carácter invisible la invalida.
   const wompiPublicKey = optional("NEXT_PUBLIC_WOMPI_PUBLIC_KEY", "").trim();
+  const wompiPrivateKey = optional("WOMPI_PRIVATE_KEY", "").trim();
   const wompiIntegritySecret = optional("WOMPI_INTEGRITY_SECRET", "").trim();
   const wompiEventsSecret = optional("WOMPI_EVENTS_SECRET", "").trim();
 
@@ -166,6 +168,7 @@ function buildServerEnv(): ServerEnv {
     signedUrlTtlSeconds: Number(optional("SIGNED_URL_TTL_SECONDS", "900")),
     wompiEnv: wompiEnvRaw as ServerEnv["wompiEnv"],
     wompiPublicKey,
+    wompiPrivateKey,
     wompiIntegritySecret,
     wompiEventsSecret,
     wompiApiUrl: optional("WOMPI_API_URL", ""),
