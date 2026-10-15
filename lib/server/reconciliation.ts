@@ -158,10 +158,21 @@ function toTransaction(t: WompiTransactionResponse): WompiTransactionLike {
  * Solo actúa sobre órdenes `pending` recientes: pasada la ventana, recuperar el
  * pago es trabajo del cron, no de cada sondeo del navegador.
  *
+ * `transactionId` es el id que Wompi añade al `redirect-url` (`?id=…`) y con el
+ * que el comprador vuelve a la app. Es la vía RÁPIDA: consultar por id funciona
+ * con la llave pública (`GET /transactions/{id}` → 200), mientras que el
+ * listado necesita permisos que esta llave no tiene (401). Sin este parámetro,
+ * una orden sin `gatewayReference` (el caso del pago recién hecho, antes de que
+ * llegue el webhook) solo podía intentar el listado, fallaba siempre y el
+ * comprador se quedaba en «Confirmando…» hasta agotar los sondeos.
+ *
  * Devuelve el estado de la orden tras el intento, o `null` si no se pudo
  * resolver (Wompi sin configurar o fallo de la API).
  */
-export async function confirmOrderWithWompi(orderCode: string): Promise<string | null> {
+export async function confirmOrderWithWompi(
+  orderCode: string,
+  transactionId?: string,
+): Promise<string | null> {
   const config = await getWompiConfig();
   if (!config.configured) return null;
 
@@ -177,13 +188,21 @@ export async function confirmOrderWithWompi(orderCode: string): Promise<string |
     return order.status;
   }
 
-  // Con id de transacción la consulta es directa y barata. Sin él —el caso del
-  // pago recién hecho, donde ni siquiera hubo webhook— se empareja la ventana
-  // por `reference`, que es el código de la orden. Igual que el nivel 2: el
-  // reference no se acepta desde el cliente, se toma de la transacción.
-  let tx: WompiTransactionResponse | null = order.gatewayReference
-    ? await fetchWompiTransaction(config, order.gatewayReference)
+  // El id guardado por el webhook es canónico; si aún no existe, se usa el que
+  // Wompi puso en la URL de retorno. Con id la consulta es directa y barata.
+  const directId = order.gatewayReference ?? (transactionId?.trim() || null);
+  let tx: WompiTransactionResponse | null = directId
+    ? await fetchWompiTransaction(config, directId)
     : null;
+
+  // El id de la URL viene del cliente: NUNCA se aprueba una orden con la
+  // transacción de otra. La `reference` de Wompi es el código de la orden, así
+  // que si no coincide se descarta (y se cae al emparejamiento por ventana).
+  if (tx && tx.reference !== order.code) tx = null;
+
+  // Sin id (o con uno que no corresponde) se empareja la ventana por
+  // `reference`, que es el código de la orden. Igual que el nivel 2: el
+  // reference no se acepta desde el cliente, se toma de la transacción.
   if (!tx) {
     const listed = await fetchWompiTransactionsSince(config, order.createdAt);
     tx =

@@ -26,9 +26,13 @@ const TERMINAL_MESSAGE: Record<string, string> = {
 
 export function PaymentResultClient({
   orderCode,
+  transactionId,
   initialResult,
 }: {
   orderCode?: string;
+  /** Id de transacción que Wompi añade al volver (`?id=…`). Con él la
+   *  confirmación es una consulta directa a la pasarela, sin esperar webhook. */
+  transactionId?: string;
   initialResult?: string;
 }) {
   const declinedByResult =
@@ -67,7 +71,7 @@ export function PaymentResultClient({
 
     const poll = async () => {
       if (cancelled) return;
-      const res = await getCheckoutOrderStatus(orderCode);
+      const res = await getCheckoutOrderStatus(orderCode, transactionId);
       if (cancelled) return;
       if (!res.ok) {
         setResult({ kind: "error", message: res.error ?? "No se pudo consultar la orden." });
@@ -86,7 +90,7 @@ export function PaymentResultClient({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [orderCode, runId, declinedByResult]);
+  }, [orderCode, transactionId, runId, declinedByResult]);
 
   const missingCode = !orderCode;
   const okStatus = !missingCode && result?.kind === "ok" ? result.status : null;

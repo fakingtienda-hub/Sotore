@@ -97,12 +97,63 @@ export function wompiCheckoutBlockReason(
   return null;
 }
 
+/**
+ * Normaliza una credencial pegada a mano. Copiar del panel de Wompi suele
+ * arrastrar un espacio o un salto de línea al final del valor; como el secreto
+ * entra TAL CUAL en el hash (no es un separador, es parte de la cadena), un
+ * carácter invisible cambia la firma y la pasarela responde
+ * «signature: La firma es inválida». Se recorta en la frontera para que el
+ * hash use siempre el valor limpio.
+ */
+export function normalizeWompiSecret(secret: string): string {
+  return secret.trim();
+}
+
+/**
+ * Diagnóstico de credenciales mal pegadas: las causas típicas de
+ * «signature: La firma es inválida» son pegar la llave PRIVADA (`prv_…`) en el
+ * campo del secreto, reutilizar el mismo valor para integridad y eventos, o
+ * arrastrar espacios internos. Devuelve avisos legibles; lista vacía si todo
+ * parece sano. Es puro para poder probarlo sin tocar Wompi.
+ */
+export function wompiSecretWarnings(input: {
+  integritySecret: string;
+  eventsSecret: string;
+}): string[] {
+  const warnings: string[] = [];
+  const { integritySecret, eventsSecret } = input;
+  const fields: Array<[string, string]> = [
+    ["integridad", integritySecret],
+    ["eventos", eventsSecret],
+  ];
+  for (const [label, secret] of fields) {
+    if (!secret) continue;
+    if (secret.trimStart().toLowerCase().startsWith("prv_")) {
+      warnings.push(
+        `El secreto de ${label} parece la LLAVE PRIVADA (prv_…). Wompi firma con el secreto de ${label}, no con la llave privada.`,
+      );
+    }
+    if (/\s/.test(secret)) {
+      warnings.push(`El secreto de ${label} contiene espacios o saltos de línea.`);
+    }
+  }
+  if (integritySecret && eventsSecret && integritySecret.trim() === eventsSecret.trim()) {
+    warnings.push(
+      "El secreto de integridad y el de eventos tienen el MISMO valor: en Wompi cada uno es distinto.",
+    );
+  }
+  return warnings;
+}
+
 export async function getWompiConfig(): Promise<WompiConfig> {
   const stored = await loadWompiSettings();
   const declaredEnv = stored.env;
-  const publicKey = stored.publicKey;
-  const integritySecret = stored.integritySecret;
-  const eventsSecret = stored.eventsSecret;
+  // El recorte se hace aquí, en la frontera de la configuración, para que TODO
+  // lo que derive de estas credenciales (detección de entorno, hash de firma,
+  // lectura de transacciones) trabaje con el valor limpio.
+  const publicKey = normalizeWompiSecret(stored.publicKey);
+  const integritySecret = normalizeWompiSecret(stored.integritySecret);
+  const eventsSecret = normalizeWompiSecret(stored.eventsSecret);
   // El prefijo de la llave manda sobre el entorno declarado: es lo que Wompi
   // usa de verdad para decidir si el cobro es real. Si la llave es reconocible,
   // la API de transacciones se apunta a su entorno (leer con la llave
@@ -146,7 +197,8 @@ export function generateIntegritySignature(
   integritySecret: string = serverEnv.wompiIntegritySecret,
 ): string {
   const { reference, amountInCents, currency, expirationTime } = input;
-  const text = `${reference}${amountInCents}${currency}${expirationTime ?? ""}${integritySecret}`;
+  const secret = normalizeWompiSecret(integritySecret);
+  const text = `${reference}${amountInCents}${currency}${expirationTime ?? ""}${secret}`;
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
 
@@ -251,18 +303,31 @@ export async function fetchWompiTransaction(
 }
 
 /**
- * Transacciones aprobadas/creadas en una ventana temporal, para emparejar
- * payments cuyo webhook nunca llegó (servidor caído, deploy, reintentos
- * agotados). Wompi acota la ventana; se pide solo lo necesario.
+ * Transacciones en una ventana temporal, para emparejar pagos cuyo webhook
+ * nunca llegó (servidor caído, deploy, reintentos agotados).
+ *
+ * OJO con los parámetros: el listado de Wompi exige `from_date`/`until_date` en
+ * **ISO-8601** (no epoch) y `page`/`page_size`. Antes se mandaba `from`/`to` con
+ * timestamps Unix, y Wompi respondía 422 → la lista salía SIEMPRE vacía y la
+ * confirmación a demanda no encontraba nunca el pago.
+ *
+ * Esta consulta necesita permisos de lectura del comercio. Con la llave
+ * PÚBLICA (`pub_test_`/`pub_prod_`), Wompi responde 401 (comprobado contra
+ * sandbox); hoy el camino fiable es consultar por id (`fetchWompiTransaction`),
+ * que sí funciona con la llave pública.
  */
 export async function fetchWompiTransactionsSince(
   config: WompiConfig,
   since: Date,
 ): Promise<WompiTransactionResponse[]> {
-  const from = Math.floor(since.getTime() / 1000);
-  const to = Math.floor(Date.now() / 1000);
+  const params = new URLSearchParams({
+    from_date: since.toISOString(),
+    until_date: new Date().toISOString(),
+    page: "1",
+    page_size: "200",
+  });
   try {
-    const body = (await wompiGet(config, `/transactions?from=${from}&to=${to}`)) as {
+    const body = (await wompiGet(config, `/transactions?${params.toString()}`)) as {
       data?: WompiTransactionResponse[];
     };
     return Array.isArray(body?.data) ? body.data : [];
@@ -313,7 +378,7 @@ export function verifyWompiEventChecksum(
         const fieldValue = resolvePath(payload.data, path);
         return fieldValue == null ? "" : String(fieldValue);
       })
-      .join("") + String(payload.timestamp ?? "") + eventsSecret;
+      .join("") + String(payload.timestamp ?? "") + normalizeWompiSecret(eventsSecret);
   const expected = createHash("sha256").update(raw, "utf8").digest("hex");
   return expected.toLowerCase() === candidate.toLowerCase();
 }

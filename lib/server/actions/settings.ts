@@ -9,7 +9,12 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { decryptSecret, encryptSecret } from "@/lib/server/vault";
 import { WOMPI_SETTINGS_KEY } from "@/lib/server/wompi-settings";
-import { wompiKeyEnvironment, wompiSecretEnvironment } from "@/lib/server/wompi";
+import {
+  normalizeWompiSecret,
+  wompiKeyEnvironment,
+  wompiSecretEnvironment,
+  wompiSecretWarnings,
+} from "@/lib/server/wompi";
 import { EMAIL_SETTINGS_KEY, emailPolicyFrom, loadEmailSettings } from "@/lib/server/email-settings";
 import { DEFAULT_EMAIL_POLICY, getEmailUsage as readEmailUsage, type EmailUsage } from "@/lib/server/email-guard";
 import { sendEmail, wrapEmailLayout } from "@/lib/email/send";
@@ -120,8 +125,11 @@ export async function saveStoreSettings(input: unknown): Promise<{ ok: boolean; 
 const wompiSettingsSchema = z.object({
   env: z.enum(["sandbox", "production"]),
   publicKey: z.string().trim().max(255),
-  integritySecret: z.string().max(512).optional(),
-  eventsSecret: z.string().max(512).optional(),
+  // `.trim()`: un secreto copiado del panel de Wompi puede traer espacio o
+  // salto de línea al final. En la firma el secreto entra literal en el hash,
+  // así que se guarda ya recortado (vacío = conservar el anterior).
+  integritySecret: z.string().trim().max(512).optional(),
+  eventsSecret: z.string().trim().max(512).optional(),
 });
 
 export type WompiSettingsAdmin = {
@@ -156,11 +164,11 @@ export async function getWompiSettings(): Promise<WompiSettingsAdmin> {
 
   const stored = (row?.value ?? {}) as Record<string, unknown>;
   const env = stored.env === "production" ? "production" : "sandbox";
-  const publicKey = typeof stored.publicKey === "string" ? stored.publicKey : "";
+  const publicKey = typeof stored.publicKey === "string" ? stored.publicKey.trim() : "";
   const integrityEnc = typeof stored.integritySecret === "string" ? stored.integritySecret : "";
   const eventsEnc = typeof stored.eventsSecret === "string" ? stored.eventsSecret : "";
-  const integritySecret = integrityEnc ? decryptSecret(integrityEnc) : null;
-  const eventsSecret = eventsEnc ? decryptSecret(eventsEnc) : null;
+  const integritySecret = integrityEnc ? normalizeWompiSecret(decryptSecret(integrityEnc) ?? "") : null;
+  const eventsSecret = eventsEnc ? normalizeWompiSecret(decryptSecret(eventsEnc) ?? "") : null;
   const keyEnv = wompiKeyEnvironment(publicKey);
   const integrityEnv = integritySecret ? wompiSecretEnvironment(integritySecret) : null;
   const eventsEnv = eventsSecret ? wompiSecretEnvironment(eventsSecret) : null;
@@ -181,6 +189,12 @@ export async function getWompiSettings(): Promise<WompiSettingsAdmin> {
       `El secreto de eventos es de ${envLabel(eventsEnv)} y la llave de ${envLabel(keyEnv)}: no se podrían verificar los webhooks.`,
     );
   }
+  // Causas típicas de «signature: La firma es inválida» que el prefijo de
+  // entorno no caza: llave privada en el campo del secreto, integridad y
+  // eventos con el mismo valor, o espacios internos al pegar.
+  warnings.push(
+    ...wompiSecretWarnings({ integritySecret: integritySecret ?? "", eventsSecret: eventsSecret ?? "" }),
+  );
   const credentialWarning =
     warnings.length > 0 ? `${warnings.join(" ")} Usa las tres credenciales del mismo entorno.` : null;
 

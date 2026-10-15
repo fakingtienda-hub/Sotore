@@ -37,13 +37,16 @@ export async function loadWompiSettings(): Promise<StoredWompiSettings> {
       const v = row.value as Record<string, unknown>;
       if (v.env === "sandbox" || v.env === "production") env = v.env;
       if (typeof v.publicKey === "string" && v.publicKey.trim()) publicKey = v.publicKey.trim();
+      // Los secretos se recortan aquí también: los valores guardados con
+      // versiones anteriores del panel (sin `.trim()`) pueden arrastrar
+      // espacios, y en la firma eso basta para que Wompi la rechace.
       if (typeof v.integritySecret === "string") {
         const dec = decryptSecret(v.integritySecret);
-        if (dec) integritySecret = dec;
+        if (dec) integritySecret = dec.trim();
       }
       if (typeof v.eventsSecret === "string") {
         const dec = decryptSecret(v.eventsSecret);
-        if (dec) eventsSecret = dec;
+        if (dec) eventsSecret = dec.trim();
       }
     }
   } catch {

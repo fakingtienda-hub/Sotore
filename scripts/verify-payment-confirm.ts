@@ -206,6 +206,34 @@ async function main() {
     `E: si la API de Wompi falla, la orden queda pending y sin excepción (dio ${statusE})`,
     statusE === "pending",
   );
+
+  /* --- Caso F: id que Wompi añade al redirect (`?id=…`) ------------------ */
+  // El comprador vuelve con ese id y la orden todavía no tiene
+  // gatewayReference (el webhook no ha llegado). Es la vía rápida real: sin
+  // ella solo quedaba el listado, que con la llave pública responde 401.
+  const codeF = `FS-VER${STAMP}-F`;
+  sinkTxId = `tx-${STAMP}-f`;
+  await createOrder({ code: codeF, total });
+  sinkReference = codeF;
+  txStatus = "APPROVED";
+  txAmount = total;
+  const statusF = await confirmOrderWithWompi(codeF, sinkTxId);
+  assert(`F: el id del redirect confirma la orden (dio ${statusF})`, statusF === "approved");
+
+  /* --- Caso G: id ajeno (reference distinta) NO debe aprobar ------------- */
+  // El id llega por la URL, así que es dato del cliente: solo vale si la
+  // transacción apunta a ESTA orden.
+  const codeG = `FS-VER${STAMP}-G`;
+  sinkTxId = `tx-${STAMP}-g`;
+  await createOrder({ code: codeG, total });
+  sinkReference = `FS-OTRA-${STAMP}`;
+  txStatus = "APPROVED";
+  txAmount = total;
+  const statusG = await confirmOrderWithWompi(codeG, sinkTxId);
+  assert(
+    `G: un id cuya reference no es la orden NO aprueba (dio ${statusG})`,
+    statusG === "pending",
+  );
 }
 
 // Sin top-level await: `tsx` emite este script como CJS.

@@ -372,9 +372,14 @@ export async function simulateDemoPayment(orderCode: string): Promise<{ ok: bool
  * dejar al usuario en "verificación" infinita. Administra titularidad vía la
  * cookie de la orden (IDOR). NO crea sesiones aquí: el acceso a la biblioteca
  * se concede con `getLibraryAccessUrl` (navegando al verify de Better Auth).
+ *
+ * `transactionId` es el `?id=…` con el que Wompi devuelve al comprador: permite
+ * confirmar con una consulta DIRECTA a la pasarela en vez de esperar a que
+ * llegue el webhook.
  */
 export async function getCheckoutOrderStatus(
   orderCode: string,
+  transactionId?: string,
 ): Promise<{ ok: true; status: string } | { ok: false; error?: string }> {
   const rl = rateLimit(`order-status:${orderCode}`, 60, 60_000);
   if (!rl.ok) {
@@ -406,7 +411,7 @@ export async function getCheckoutOrderStatus(
   // devuelve el estado que haya en la base.
   let status = order.status;
   if (status === "pending") {
-    const confirmed = await confirmOrderWithWompi(orderCode).catch(() => null);
+    const confirmed = await confirmOrderWithWompi(orderCode, transactionId).catch(() => null);
     if (confirmed && confirmed !== status) {
       status = confirmed;
       // El acceso recién concedido tiene que verse en la biblioteca sin esperar

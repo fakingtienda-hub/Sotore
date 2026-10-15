@@ -1,9 +1,12 @@
 import "dotenv/config";
 
 import {
+  generateIntegritySignature,
+  normalizeWompiSecret,
   wompiCheckoutBlockReason,
   wompiKeyEnvironment,
   wompiSecretEnvironment,
+  wompiSecretWarnings,
   type WompiConfig,
 } from "../lib/server/wompi";
 
@@ -111,6 +114,60 @@ function main() {
       integrityEnv: "production",
       envMismatch: true,
     }) === null,
+  );
+
+  console.log("\n== Firma de integridad: concatenación y normalización ==");
+  // Vector EXACTO de la documentación oficial de Wompi (Widget & Checkout Web
+  // → «Paso 3: Genera una firma de integridad»). Ancla el orden
+  // referencia+monto+moneda+secreto y el algoritmo SHA-256.
+  assert(
+    "coincide con el vector oficial de Wompi (referencia+monto+moneda+secreto)",
+    generateIntegritySignature(
+      { reference: "sk8-438k4-xmxm392-sn2m", amountInCents: 2490000, currency: "COP" },
+      "prod_integrity_Z5mMke9x0k8gpErbDqwrJXMqsI6SFli6",
+    ) === "37c8407747e595535433ef8f6a811d853cd943046624a0ec04662b17bbf33bf5",
+  );
+
+  const baseSigInput = { reference: "FS-ABC-123", amountInCents: 2490000, currency: "COP" };
+  const cleanSig = generateIntegritySignature(baseSigInput, "test_integrity_abc");
+  assert(
+    "secreto con salto de línea final produce la MISMA firma (se recorta)",
+    generateIntegritySignature(baseSigInput, "test_integrity_abc\n") === cleanSig,
+  );
+  assert(
+    "secreto con espacios a ambos lados produce la MISMA firma",
+    generateIntegritySignature(baseSigInput, "  test_integrity_abc  ") === cleanSig,
+  );
+  assert(
+    "un secreto distinto SÍ cambia la firma",
+    generateIntegritySignature(baseSigInput, "test_integrity_xyz") !== cleanSig,
+  );
+  assert("normalizeWompiSecret recorta los extremos", normalizeWompiSecret("  abc\n") === "abc");
+
+  console.log("\n== Diagnóstico de secretos mal pegados ==");
+  assert(
+    "llave privada (prv_…) en el campo del secreto se detecta",
+    wompiSecretWarnings({ integritySecret: "prv_test_abc", eventsSecret: "" }).some((w) =>
+      w.includes("LLAVE PRIVADA"),
+    ),
+  );
+  assert(
+    "integridad y eventos con el mismo valor se detecta",
+    wompiSecretWarnings({
+      integritySecret: "test_integrity_a",
+      eventsSecret: "test_integrity_a",
+    }).some((w) => w.includes("MISMO valor")),
+  );
+  assert(
+    "espacios internos en el secreto se detectan",
+    wompiSecretWarnings({ integritySecret: "test integrity abc", eventsSecret: "" }).some((w) =>
+      w.includes("espacios"),
+    ),
+  );
+  assert(
+    "secretos sanos y distintos no generan avisos",
+    wompiSecretWarnings({ integritySecret: "test_integrity_a", eventsSecret: "test_events_b" }).length ===
+      0,
   );
 
   console.log(`\n${failures === 0 ? "TODO OK" : `${failures} FALLOS`}`);

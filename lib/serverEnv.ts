@@ -76,9 +76,12 @@ function buildServerEnv(): ServerEnv {
   const appUrl = optional("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
   const databaseUrl = requiredAny(["POSTGRES_URL", "POSTGRES_PRISMA_URL", "DATABASE_URL"]);
   const authSecret = requiredAny(["AUTH_SECRET", "BETTER_AUTH_SECRET"]);
-  const wompiPublicKey = optional("NEXT_PUBLIC_WOMPI_PUBLIC_KEY", "");
-  const wompiIntegritySecret = optional("WOMPI_INTEGRITY_SECRET", "");
-  const wompiEventsSecret = optional("WOMPI_EVENTS_SECRET", "");
+  // `.trim()`: los valores copiados del panel de Wompi (o pegados en el panel
+  // de Vercel) pueden traer un salto de línea al final. En una firma el secreto
+  // es parte literal del hash, así que un carácter invisible la invalida.
+  const wompiPublicKey = optional("NEXT_PUBLIC_WOMPI_PUBLIC_KEY", "").trim();
+  const wompiIntegritySecret = optional("WOMPI_INTEGRITY_SECRET", "").trim();
+  const wompiEventsSecret = optional("WOMPI_EVENTS_SECRET", "").trim();
 
   if (isProductionRuntime) {
     /* Fatales: sin cualquiera de estas la app no puede servir NI UNA página
