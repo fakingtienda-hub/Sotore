@@ -13,6 +13,7 @@ import { claimCouponForApprovedOrder } from "@/lib/server/coupon-usage";
 import { setOrderTokenCookie, ownerMatchesOrder } from "@/lib/server/order-ownership";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { getWompiConfig } from "@/lib/server/wompi";
+import { RETRYABLE_ORDER_STATUSES } from "@/lib/server/order-approval";
 import { confirmOrderWithWompi } from "@/lib/server/reconciliation";
 import { getSession } from "@/lib/auth/session";
 import { serverEnv } from "@/lib/serverEnv";
@@ -410,7 +411,10 @@ export async function getCheckoutOrderStatus(
   // con el pago ya cobrado. Un fallo de la consulta no rompe la página: se
   // devuelve el estado que haya en la base.
   let status = order.status;
-  if (status === "pending") {
+  // Un rechazo se vuelve a preguntar igual que una orden pendiente: si el
+  // comprador reintenta y la pasarela acaba aprobando, ese pago tiene que poder
+  // entrar (y el comprador no se quedaría en "rechazado" con la orden cobrada).
+  if (RETRYABLE_ORDER_STATUSES.includes(status)) {
     const confirmed = await confirmOrderWithWompi(orderCode, transactionId).catch(() => null);
     if (confirmed && confirmed !== status) {
       status = confirmed;

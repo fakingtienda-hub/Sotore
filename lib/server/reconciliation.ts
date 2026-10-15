@@ -7,7 +7,13 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { ensureOrderEntitlements } from "@/lib/server/entitlements";
 import { expireStalePendingOrders } from "@/lib/server/order-expiry";
-import { approveOrderFromTransaction, type WompiTransactionLike } from "@/lib/server/order-approval";
+import {
+  approveOrderFromTransaction,
+  markOrderTerminalFromTransaction,
+  FAILED_TX_STATUSES,
+  RETRYABLE_ORDER_STATUSES,
+  type WompiTransactionLike,
+} from "@/lib/server/order-approval";
 import { UNDELIVERED_SCAN_DAYS } from "@/lib/server/order-anomalies";
 import {
   fetchWompiTransaction,
@@ -43,6 +49,17 @@ const PAYMENT_LOOKBACK_HOURS = 72;
 const MAX_ORDERS_PER_RUN = 200;
 /** Antigüedad máxima de una orden para consultarla a demanda (nivel 3). */
 const ON_DEMAND_LOOKUP_MAX_MS = 60 * 60 * 1000;
+
+/**
+ * Techo de UNA consulta en el camino caliente del comprador.
+ *
+ * Medido contra Wompi: `GET /transactions/{id}` tarda 0,4–0,9 s, pero una
+ * resolución DNS fallida ha llegado a llevarse 11 s. El sondeo no programa el
+ * siguiente hasta que responde la petición, así que un techo de 15 s convertía
+ * UN lago de red en 15+ s de «Confirmando…» para el comprador. Se aborta pronto
+ * y el siguiente sondeo reintenta: perder un intento es barato, bloquearlo no.
+ */
+const ON_DEMAND_FETCH_TIMEOUT_MS = 5_000;
 
 export type ReconcileReport = {
   ranAt: string;
@@ -168,6 +185,10 @@ function toTransaction(t: WompiTransactionResponse): WompiTransactionLike {
  *
  * Devuelve el estado de la orden tras el intento, o `null` si no se pudo
  * resolver (Wompi sin configurar o fallo de la API).
+ *
+ * No solo aprueba: un `DECLINED`/`VOIDED`/`ERROR` también se refleja aquí. Antes
+ * solo se miraba `APPROVED`, así que con el pago rechazado la orden seguía
+ * `pending` y el comprador agotaba los 40 sondeos viendo «Confirmando…».
  */
 export async function confirmOrderWithWompi(
   orderCode: string,
@@ -182,47 +203,65 @@ export async function confirmOrderWithWompi(
     .where(eq(schema.orders.code, orderCode))
     .limit(1);
   if (!order) return null;
-  if (order.status !== "pending") return order.status;
+  // Un rechazo también se re-consulta: si la pasarela acaba aprobando otra
+  // transacción de la misma orden, ese pago tiene que poder entrar.
+  if (!RETRYABLE_ORDER_STATUSES.includes(order.status)) return order.status;
 
   if (Date.now() - order.createdAt.getTime() > ON_DEMAND_LOOKUP_MAX_MS) {
     return order.status;
   }
 
-  // El id guardado por el webhook es canónico; si aún no existe, se usa el que
-  // Wompi puso en la URL de retorno. Con id la consulta es directa y barata.
-  const directId = order.gatewayReference ?? (transactionId?.trim() || null);
-  let tx: WompiTransactionResponse | null = directId
-    ? await fetchWompiTransaction(config, directId)
-    : null;
+  // El id que trae el navegador (URL de retorno) es el intento más reciente, así
+  // que manda sobre el guardado: un rechazo con la tarjeta A deja
+  // `gatewayReference` y el reintento con la B llega por la URL. Con id la
+  // consulta es directa y barata; sin él se usa el que guardó el webhook.
+  const directId = transactionId?.trim() || order.gatewayReference || null;
+  let tx: WompiTransactionResponse | null = null;
 
-  // El id de la URL viene del cliente: NUNCA se aprueba una orden con la
-  // transacción de otra. La `reference` de Wompi es el código de la orden, así
-  // que si no coincide se descarta (y se cae al emparejamiento por ventana).
-  if (tx && tx.reference !== order.code) tx = null;
-
-  // Sin id (o con uno que no corresponde) se empareja la ventana por
-  // `reference`, que es el código de la orden. Igual que el nivel 2: el
-  // reference no se acepta desde el cliente, se toma de la transacción.
-  if (!tx) {
-    const listed = await fetchWompiTransactionsSince(config, order.createdAt);
-    tx =
-      listed.find(
-        (t) => t.reference === order.code && t.status?.toUpperCase() === "APPROVED",
-      ) ?? null;
+  if (directId) {
+    tx = await fetchWompiTransaction(config, directId, ON_DEMAND_FETCH_TIMEOUT_MS);
+    // El id de la URL viene del cliente: NUNCA se confirma con la transacción de
+    // otra. La `reference` de Wompi es el código de la orden, así que si no
+    // coincide se descarta.
+    if (tx && tx.reference !== order.code) tx = null;
   }
-  if (!tx || tx.status?.toUpperCase() !== "APPROVED") return order.status;
 
-  // La revalidación de rutas NO va aquí: `revalidatePath` exige un contexto de
-  // petición, y esta función también se llama desde scripts de verificación. La
-  // hace el caller (`getCheckoutOrderStatus`), que siempre corre en una request.
-  await approveOrderFromTransaction(order, toTransaction(tx));
+  // UN solo viaje de red por sondeo. El listado solo se intenta cuando no hubo
+  // id en absoluto: si el id existió y la consulta falló, volver a listar aquí
+  // añadiría un segundo viaje de red a cada sondeo sin poder confirmar nada
+  // (el listado, además, exige permisos que la llave pública no tiene: 401).
+  if (!tx && !directId) {
+    const listed = await fetchWompiTransactionsSince(config, order.createdAt);
+    // Solo se empareja por `reference`: el estado se decide abajo, porque un
+    // rechazo también tiene que reflejarse.
+    tx = listed.find((t) => t.reference === order.code) ?? null;
+  }
+  if (!tx) return order.status;
 
-  const [after] = await db
-    .select({ status: schema.orders.status })
-    .from(schema.orders)
-    .where(eq(schema.orders.id, order.id))
-    .limit(1);
-  return after?.status ?? order.status;
+  const txStatus = tx.status?.toUpperCase() ?? "";
+
+  if (txStatus === "APPROVED") {
+    // La revalidación de rutas NO va aquí: `revalidatePath` exige un contexto de
+    // petición, y esta función también se llama desde scripts de verificación. La
+    // hace el caller (`getCheckoutOrderStatus`), que siempre corre en una request.
+    await approveOrderFromTransaction(order, toTransaction(tx));
+
+    const [after] = await db
+      .select({ status: schema.orders.status })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, order.id))
+      .limit(1);
+    return after?.status ?? order.status;
+  }
+
+  // Rechazo o error: la tienda lo refleja en el primer sondeo, en vez de dejar
+  // la orden pendiente y al comprador esperando.
+  if (FAILED_TX_STATUSES.includes(txStatus)) {
+    const marked = await markOrderTerminalFromTransaction(order, toTransaction(tx));
+    if (marked) return txStatus.toLowerCase();
+  }
+
+  return order.status;
 }
 
 /**

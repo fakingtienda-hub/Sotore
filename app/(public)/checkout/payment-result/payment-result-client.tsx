@@ -7,10 +7,12 @@ import { getCheckoutOrderStatus, getLibraryAccessUrl } from "@/lib/server/action
 
 /* El servidor consulta a Wompi en cada sondeo, así que el estado llega en
    cuanto la pasarela lo sabe; el intervalo solo decide cuánto tarda en verse.
-   3s con hasta 40 intentos mantiene los mismos ~2 minutos de paciencia que
-   antes, pero se entera del pago en la mitad de tiempo. */
-const POLL_INTERVAL_MS = 3000;
-const MAX_POLLS = 40;
+   1,5 s con hasta 80 intentos conserva los mismos ~2 minutos de paciencia que
+   3 s × 40, pero consolida el estado en la mitad de tiempo. Nunca excede el
+   límite del action (60 consultas/min): cada ciclo es ≥ intervalo, porque se
+   cuenta desde el inicio de la petición. */
+const POLL_INTERVAL_MS = 1500;
+const MAX_POLLS = 80;
 
 const TERMINAL_STATUSES = new Set(["declined", "error", "voided", "expired"]);
 const TERMINAL_RESULT_CODES = new Set(["DECLINED", "VOIDED", "ERROR", "REJECTED", "EXPIRED"]);
@@ -71,6 +73,13 @@ export function PaymentResultClient({
 
     const poll = async () => {
       if (cancelled) return;
+      // El intervalo se cuenta desde el INICIO de la petición, no desde la
+      // respuesta. Si se contara desde la respuesta, cada ciclo duraría
+      // `intervalo + duración del action` (el viaje a Wompi solo ya son
+      // 0,4–0,9 s, y una resolución de red lenta puede costar varios segundos
+      // más): con «3 s» declarados el ciclo real rondaba 4 s y el
+      // «Confirmando…» se alargaba en silencio mucho más.
+      const startedAt = Date.now();
       const res = await getCheckoutOrderStatus(orderCode, transactionId);
       if (cancelled) return;
       if (!res.ok) {
@@ -82,10 +91,13 @@ export function PaymentResultClient({
         return;
       }
       setPolls((p) => p + 1);
-      timer = setTimeout(poll, POLL_INTERVAL_MS);
+      const spent = Date.now() - startedAt;
+      timer = setTimeout(poll, Math.max(0, POLL_INTERVAL_MS - spent));
     };
 
-    timer = setTimeout(poll, 400);
+    // Primer sondeo sin espera: la pasarela suele saber ya el resultado cuando
+    // el comprador aterriza en la página.
+    timer = setTimeout(poll, 0);
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);

@@ -277,23 +277,39 @@ export type WompiTransactionResponse = {
   [key: string]: unknown;
 };
 
-async function wompiGet(config: WompiConfig, path: string): Promise<unknown> {
+async function wompiGet(
+  config: WompiConfig,
+  path: string,
+  timeoutMs = 15_000,
+): Promise<unknown> {
   const res = await fetch(`${config.apiUrl}${path}`, {
     headers: { Authorization: `Bearer ${config.publicKey}` },
     cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`Wompi ${path} respondió ${res.status}`);
   return res.json();
 }
 
-/** Consulta una transacción por id. `null` si no existe o si la API falla. */
+/**
+ * Consulta una transacción por id. `null` si no existe o si la API falla.
+ *
+ * `timeoutMs` lo baja quien está en el camino caliente del comprador: el sondeo
+ * de estado no puede quedarse colgado el techo de 15 s (se han observado
+ * resoluciones DNS de 11 s hacia el dominio de Wompi), porque mientras dura el
+ * navegador no tiene respuesta y no programa el siguiente sondeo.
+ */
 export async function fetchWompiTransaction(
   config: WompiConfig,
   transactionId: string,
+  timeoutMs = 15_000,
 ): Promise<WompiTransactionResponse | null> {
   try {
-    const body = (await wompiGet(config, `/transactions/${encodeURIComponent(transactionId)}`)) as {
+    const body = (await wompiGet(
+      config,
+      `/transactions/${encodeURIComponent(transactionId)}`,
+      timeoutMs,
+    )) as {
       data?: WompiTransactionResponse;
     };
     return body?.data ?? null;

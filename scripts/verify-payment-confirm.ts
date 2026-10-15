@@ -34,6 +34,8 @@ function assert(name: string, ok: boolean) {
 let requests = 0;
 /** Simula una caída de Wompi: la consulta debe fallar sin aprobar nada. */
 let failMode = false;
+/** Simula el 401 que la API real da al LISTAR transacciones con la llave pública. */
+let listUnauthorized = false;
 let txStatus = "APPROVED";
 let txAmount: number | null = null;
 let sinkReference = "";
@@ -60,6 +62,13 @@ const sink = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/transactions") {
+    if (listUnauthorized) {
+      res.statusCode = 401;
+      res.end(
+        JSON.stringify({ error: { type: "INVALID_ACCESS_TOKEN", reason: "Solicitud no autorizada" } }),
+      );
+      return;
+    }
     res.end(JSON.stringify({ data: [transaction()] }));
     return;
   }
@@ -233,6 +242,76 @@ async function main() {
   assert(
     `G: un id cuya reference no es la orden NO aprueba (dio ${statusG})`,
     statusG === "pending",
+  );
+
+  /* --- Caso H: rechazo reflejado en la tienda ----------------------------- */
+  const codeH = `FS-VER${STAMP}-H`;
+  sinkTxId = `tx-${STAMP}-h`;
+  await createOrder({ code: codeH, total });
+  sinkReference = codeH;
+  txStatus = "DECLINED";
+  txAmount = total;
+  const statusH = await confirmOrderWithWompi(codeH, sinkTxId);
+  assert(
+    `H: un DECLINED se confirma a demanda (dio ${statusH})`,
+    statusH === "declined",
+  );
+  assert("H: el rechazo queda persistido en la orden", (await statusOf(codeH)) === "declined");
+
+  /* --- Caso I: un APPROVED posterior SÍ recupera una orden rechazada ----- */
+  // El comprador falló con una tarjeta y luego pagó con otra: son dos
+  // transacciones sobre la misma orden. Si el rechazo la sellara, el pago
+  // real quedaría bloqueado con el dinero cobrado.
+  sinkTxId = `tx-${STAMP}-i`;
+  txStatus = "APPROVED";
+  const statusI = await confirmOrderWithWompi(codeH, sinkTxId);
+  assert(
+    `I: tras el rechazo, un pago aprobado SÍ aprueba (dio ${statusI})`,
+    statusI === "approved",
+  );
+  assert("I: la orden quedó aprobada en la base", (await statusOf(codeH)) === "approved");
+
+  /* --- Caso J: rechazo de otra referencia no toca la orden ---------------- */
+  const codeJ = `FS-VER${STAMP}-J`;
+  sinkTxId = `tx-${STAMP}-j`;
+  await createOrder({ code: codeJ, total });
+  sinkReference = `FS-OTRA-${STAMP}`;
+  txStatus = "DECLINED";
+  const statusJ = await confirmOrderWithWompi(codeJ, sinkTxId);
+  assert(
+    `J: un rechazo ajeno NO marca la orden (dio ${statusJ})`,
+    statusJ === "pending",
+  );
+
+  /* --- Caso K: UN solo viaje de red por sondeo --------------------------- */
+  // Antes, si el id existía pero la consulta fallaba, se encadenaba además el
+  // listado: DOS viajes de red por sondeo en el camino caliente del comprador.
+  const codeK = `FS-VER${STAMP}-K`;
+  sinkTxId = `tx-${STAMP}-k`;
+  await createOrder({ code: codeK, total });
+  sinkReference = codeK;
+  txStatus = "PENDING";
+  const requestsBeforeK = requests;
+  await confirmOrderWithWompi(codeK, sinkTxId);
+  assert(
+    `K: con id se hace UNA sola llamada a Wompi (fueron ${requests - requestsBeforeK})`,
+    requests - requestsBeforeK === 1,
+  );
+
+  /* --- Caso L: sin id y con el listado rechazado (401 real) --------------- */
+  // Es la situación de producción con solo la llave pública: no hay id porque
+  // el redirect no lo trajo, y el listado no está permitido. Debe devolver el
+  // estado de la base sin reventar ni aprobar nada.
+  const codeL = `FS-VER${STAMP}-L`;
+  await createOrder({ code: codeL, total });
+  sinkReference = codeL;
+  txStatus = "APPROVED";
+  listUnauthorized = true;
+  const statusL = await confirmOrderWithWompi(codeL).catch(() => "excepcion");
+  listUnauthorized = false;
+  assert(
+    `L: sin id y con listado 401 la orden sigue pending sin reventar (dio ${statusL})`,
+    statusL === "pending",
   );
 }
 

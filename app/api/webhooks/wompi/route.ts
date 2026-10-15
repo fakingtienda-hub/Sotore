@@ -5,7 +5,10 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { revokeOrderEntitlements } from "@/lib/server/entitlements";
 import { releaseCouponForOrder } from "@/lib/server/coupon-usage";
-import { approveOrderFromTransaction } from "@/lib/server/order-approval";
+import {
+  approveOrderFromTransaction,
+  markOrderTerminalFromTransaction,
+} from "@/lib/server/order-approval";
 import { getWompiConfig, verifyWompiEventChecksum, type WompiEventPayload } from "@/lib/server/wompi";
 import { expireStalePendingOrders } from "@/lib/server/order-expiry";
 import { wrapEmailLayout, sendEmail } from "@/lib/email/send";
@@ -188,12 +191,26 @@ export async function POST(request: Request) {
       revalidatePath("/library");
       return Response.json({ ok: true, revoked: true, transactionId: txId });
     }
-    // Transacción distinta a la aprobada, u orden todavía pendiente: se
-    // registra la firma pero NO se cambia el estado de la orden, de modo que
-    // un APPROVED posterior (de la transacción real) sigue siendo procesable.
+    // Orden todavía pendiente: el intento se cayó y la tienda lo refleja ya.
+    // Antes se ignoraba con el argumento de no "matar" un pago válido, pero eso
+    // dejaba el rechazo invisible: el comprador agotaba los sondeos viendo
+    // «Confirmando…» y al administrador le quedaba una orden pending. El riesgo
+    // que se quería evitar queda cubierto por `approveOrderFromTransaction`,
+    // que SÍ puede reclamar una orden ya en `declined` si llega un APPROVED
+    // verificado (reintento con otra tarjeta), así que un reintento no se pierde.
+    if (order.status === "pending") {
+      const marked = await markOrderTerminalFromTransaction(order, { ...transaction, status });
+      return Response.json(
+        marked ? { ok: true, terminal: status } : { ok: true, ignored: "orden ya no pendiente" },
+      );
+    }
+    // Transacción distinta a la aprobada, u orden ya en otro estado: se registra
+    // el hecho pero no se cambia el estado, de modo que un APPROVED posterior de
+    // la transacción real siga siendo procesable.
     return Response.json({
       ok: true,
-      ignored: order.status === "approved" ? "transacción distinta a la aprobada" : "orden aún no aprobada",
+      ignored:
+        order.status === "approved" ? "transacción distinta a la aprobada" : `orden en estado ${order.status}`,
     });
   }
 

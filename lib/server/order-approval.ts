@@ -35,8 +35,31 @@ export type ApprovalOutcome =
   | { outcome: "already_approved"; granted: number; existing: number }
   | { outcome: "ignored"; status: string | null };
 
+/** Estados terminales de una transacción de Wompi que cierran un intento sin aprobar. */
+export const FAILED_TX_STATUSES: readonly string[] = ["DECLINED", "VOIDED", "ERROR"];
+
+/**
+ * Estados de la orden desde los que todavía se consulta a Wompi (o se reclama
+ * un pago ya verificado).
+ *
+ * Un rechazo NO es un punto muerto: quien falla con la tarjeta A y luego paga
+ * con la B genera DOS transacciones sobre la misma orden. Si el primer rechazo
+ * sellara la orden para siempre, la aprobación de la segunda quedaría bloqueada
+ * con el dinero ya cobrado. Por eso `declined`/`voided`/`error` siguen siendo
+ * «reclamables» — pero SOLO si la pasarela devuelve un APPROVED verificado con
+ * monto y moneda que cuadran; de ahí sale un solo valor.
+ */
+export const RETRYABLE_ORDER_STATUSES: readonly string[] = [
+  "pending",
+  "declined",
+  "voided",
+  "error",
+];
+
 /** Estados desde los que un APPROVED verificado puede reclamar la orden. */
-const CLAIMABLE: readonly string[] = ["pending", "expired"];
+const CLAIMABLE: readonly string[] = [...RETRYABLE_ORDER_STATUSES];
+/** Añadiendo las órdenes caducadas: solo la reconciliación (nivel 2) las rescata. */
+const RECOVERY_CLAIMABLE: readonly string[] = [...CLAIMABLE, "expired"];
 
 /**
  * Clave que se escribe en `orders.gatewayPayload.ignoredReason` cuando el
@@ -90,9 +113,9 @@ export async function approveOrderFromTransaction(
     .where(
       and(
         eq(schema.orders.id, order.id),
-        options.allowExpiredRecovery
-          ? inArray(schema.orders.status, [...CLAIMABLE])
-          : eq(schema.orders.status, "pending"),
+        inArray(schema.orders.status, [
+          ...(options.allowExpiredRecovery ? RECOVERY_CLAIMABLE : CLAIMABLE),
+        ]),
       ),
     )
     .returning({ id: schema.orders.id });
@@ -130,4 +153,42 @@ export async function approveOrderFromTransaction(
     return { outcome: "already_approved", granted: delivered.granted, existing: delivered.existing };
   }
   return { outcome: "ignored", status: recheck?.status ?? null };
+}
+
+/**
+ * Marca una orden `pending` con el estado terminal de su transacción
+ * (DECLINED/VOIDED/ERROR). Rechazos y errores eran invisibles en la tienda: el
+ * webhook los ignoraba en órdenes pendientes y la confirmación a demanda solo
+ * miraba `APPROVED`, así que con el pago ya caído el comprador veía
+ * «Confirmando…» hasta agotar los sondeos y la orden seguía `pending` para el
+ * administrador.
+ *
+ * El claim es atómico sobre `pending` (una sola escritura gana, idempotente con
+ * reintentos del webhook), y solo se acepta una transacción cuya `reference` sea
+ * el código de la orden: cuando el id llega por la URL del redirect es dato del
+ * cliente y no prueba de nada.
+ *
+ * Devuelve `true` si esta llamada fue la que cambió el estado.
+ */
+export async function markOrderTerminalFromTransaction(
+  order: schema.Order,
+  transaction: WompiTransactionLike,
+): Promise<boolean> {
+  const status = (transaction.status ?? "").toUpperCase();
+  if (!FAILED_TX_STATUSES.includes(status)) return false;
+  if (transaction.reference && transaction.reference !== order.code) return false;
+
+  const claimed = await db
+    .update(schema.orders)
+    .set({
+      gateway: "wompi",
+      gatewayReference: transaction.id,
+      gatewayStatus: status,
+      gatewayPayload: { ...transaction },
+      status: status.toLowerCase(),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "pending")))
+    .returning({ id: schema.orders.id });
+  return claimed.length > 0;
 }
