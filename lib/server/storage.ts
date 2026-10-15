@@ -15,6 +15,7 @@ import {
   type StorageRange,
 } from "@/lib/server/storage-driver";
 import { createR2Storage } from "@/lib/server/storage-r2";
+import { loadStorageSettings, type StoredStorageSettings } from "@/lib/server/storage-settings";
 
 export class LocalStorage implements StorageDriver {
   readonly kind = "local" as const;
@@ -179,37 +180,71 @@ export class LocalStorage implements StorageDriver {
   }
 }
 
-/* Driver activo. Con STORAGE_ENDPOINT + credenciales en el entorno usa R2; si
- * no, cae al filesystem local para que el desarrollo siga funcionando. */
-function selectStorage(): StorageDriver {
-  const r2 = createR2Storage();
-  if (r2) return r2;
+/* Driver activo. La configuración vive en `lib/server/storage-settings.ts` (BD
+ * con fallback a entorno): con driver "r2" y las tres piezas presentes usa R2;
+ * si no, cae al filesystem local para que el desarrollo siga funcionando. */
+function buildDriver(cfg: StoredStorageSettings): StorageDriver {
+  if (cfg.driver === "r2") {
+    const r2 = createR2Storage({
+      endpoint: cfg.endpoint,
+      accessKeyId: cfg.accessKeyId,
+      secretAccessKey: cfg.secretAccessKey,
+      bucket: cfg.bucket,
+    });
+    if (r2) return r2;
+  }
   return new LocalStorage();
 }
 
-let storageInstance: StorageDriver | null = null;
+/** TTL del caché del driver. Corto a propósito: si otra instancia guarda una
+ *  configuración nueva, esta la recoge sin reiniciar. */
+const DRIVER_CACHE_MS = 30_000;
 
-function storageDriver(): StorageDriver {
-  storageInstance ??= selectStorage();
-  return storageInstance;
+let driverCache: { driver: StorageDriver; at: number } | null = null;
+
+/** Driver activo, resolviendo la configuración (BD + entorno) en el primer uso
+ *  y cacheándola. Es asíncrono porque la config puede venir de la BD, y evita
+ *  abrir el bucket en cada subida/descarga. */
+export async function getStorageDriver(): Promise<StorageDriver> {
+  const now = Date.now();
+  if (driverCache && now - driverCache.at < DRIVER_CACHE_MS) return driverCache.driver;
+  const cfg = await loadStorageSettings();
+  const driver = buildDriver(cfg);
+  driverCache = { driver, at: now };
+  return driver;
 }
 
-/** El driver se elige en el primer uso. `next build` importa esta módulo para
- *  recoger page data; elegirlo aquí exigiría el entorno de storage en build.
+/** Fuerza a releer la configuración en la próxima operación (tras guardar). */
+export function invalidateStorageDriver(): void {
+  driverCache = null;
+}
+
+/** Tipo del driver activo (`local` o `r2`). Sustituye a la lectura síncrona de
+ *  `storage.kind`, imposible ahora que el driver se resuelve de forma async. */
+export async function storageKind(): Promise<StorageDriver["kind"]> {
+  return (await getStorageDriver()).kind;
+}
+
+/** Fachada del driver activo. Como la config se resuelve de forma asíncrona, el
+ *  proxy no puede exponer propiedades síncronas (`kind`): cada acceso a un método
+ *  devuelve una función que primero resuelve el driver y luego delega. Para
+ *  `kind` usar `storageKind()`.
  *
- *  Ojo con el `receiver` del trap: hay que leer contra el driver real y no
- *  reenviar el proxy. Con el proxy como `receiver`, dentro de los métodos `this`
- *  pasa a ser el proxy, y las escrituras de campo —el cache del getter `root`,
- *  por ejemplo— caen en el target del proxy (un `{}` vacío) en vez de en el
- *  driver. `root` se quedaba entonces en `null` para siempre y toda subida
- *  moría en `path.join(null, ...)`, en local y en producción por igual. Leyendo
- *  con el driver como `receiver` y ligando los métodos, `this` es el driver
- *  tanto en getters como en métodos. */
+ *  Ojo con el `this`: hay que leer contra el driver real y llamar con él como
+ *  receptor. Con el proxy como receptor, dentro de los métodos `this` sería el
+ *  proxy y las escrituras de campo —el cache del getter `root`, por ejemplo—
+ *  caerían en el target del proxy (un `{}` vacío) en vez de en el driver: `root`
+ *  se quedaría en `null` y toda subida moriría en `path.join(null, ...)`. Por eso
+ *  se lee del driver y se invoca con `apply(driver, …)`. */
 export const storage: StorageDriver = new Proxy({} as StorageDriver, {
   get(_target, prop) {
-    const driver = storageDriver();
-    const value = Reflect.get(driver, prop, driver);
-    return typeof value === "function" ? value.bind(driver) : value;
+    return (...args: unknown[]) =>
+      getStorageDriver().then((driver) => {
+        const value = (driver as unknown as Record<string | symbol, unknown>)[prop];
+        return typeof value === "function"
+          ? (value as (...a: unknown[]) => unknown).apply(driver, args)
+          : value;
+      });
   },
 });
 

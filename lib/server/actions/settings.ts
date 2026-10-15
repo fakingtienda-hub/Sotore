@@ -1,5 +1,7 @@
 ﻿"use server";
 
+import { randomUUID } from "node:crypto";
+
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -7,6 +9,14 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
+import { invalidateStorageDriver } from "@/lib/server/storage";
+import { createR2Storage } from "@/lib/server/storage-r2";
+import {
+  envStorageSettings,
+  loadStorageSettings,
+  storageR2Ready,
+  STORAGE_SETTINGS_KEY,
+} from "@/lib/server/storage-settings";
 import { decryptSecret, encryptSecret } from "@/lib/server/vault";
 import { WOMPI_SETTINGS_KEY } from "@/lib/server/wompi-settings";
 import {
@@ -534,5 +544,166 @@ export async function sendTestEmail(
     return { ok: true, provider: res.provider };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo enviar el correo." };
+  }
+}
+
+const storageSettingsSchema = z.object({
+  driver: z.enum(["local", "r2"]),
+  endpoint: z.string().trim().max(255).optional(),
+  bucket: z.string().trim().max(255).optional(),
+  accessKeyId: z.string().trim().max(255).optional(),
+  secretAccessKey: z.string().trim().max(512).optional(),
+});
+
+export type StorageSettingsAdmin = {
+  /** Driver elegido en el panel. */
+  driver: "local" | "r2";
+  endpoint: string;
+  bucket: string;
+  accessKeyIdSet: boolean;
+  accessKeyIdLast4: string;
+  secretAccessKeySet: boolean;
+  secretAccessKeyLast4: string;
+  /** El driver elegido tiene lo mínimo para funcionar (local siempre). */
+  configured: boolean;
+  /** Driver que realmente se usará tras el fallback a local. */
+  activeDriver: "local" | "r2";
+  /** `db` si hay fila guardada; `env` si solo vienen del entorno. */
+  source: "db" | "env";
+};
+
+/** Config efectiva para el panel: BD con fallback a entorno, y NUNCA devuelve
+ *  las llaves completas (solo los últimos 4 caracteres). */
+export async function getStorageSettings(): Promise<StorageSettingsAdmin> {
+  await requireAdmin();
+
+  const [row] = await db
+    .select({ id: schema.storeSettings.id })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.key, STORAGE_SETTINGS_KEY))
+    .limit(1);
+
+  const effective = await loadStorageSettings();
+  const ready = storageR2Ready(effective);
+
+  return {
+    driver: effective.driver,
+    endpoint: effective.endpoint,
+    bucket: effective.bucket,
+    accessKeyIdSet: !!effective.accessKeyId,
+    accessKeyIdLast4: effective.accessKeyId.slice(-4),
+    secretAccessKeySet: !!effective.secretAccessKey,
+    secretAccessKeyLast4: effective.secretAccessKey.slice(-4),
+    // Local siempre está listo; R2 exige endpoint + bucket + las dos llaves.
+    configured: effective.driver === "r2" ? ready : true,
+    activeDriver: effective.driver === "r2" && ready ? "r2" : "local",
+    source: row ? "db" : "env",
+  };
+}
+
+export async function saveStorageSettings(input: unknown): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+
+  const parsed = storageSettingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((e) => e.message).join("; ") };
+  }
+  const { driver, endpoint: endpointIn, bucket: bucketIn, accessKeyId, secretAccessKey } = parsed.data;
+
+  const [row] = await db
+    .select()
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.key, STORAGE_SETTINGS_KEY))
+    .limit(1);
+  const stored = (row?.value ?? {}) as Record<string, unknown>;
+  const keep = (v: unknown) => (typeof v === "string" ? v : "");
+  const env = envStorageSettings();
+
+  const endpoint = (endpointIn?.trim() || keep(stored.endpoint) || env.endpoint).trim();
+  const bucket = (bucketIn?.trim() || keep(stored.bucket) || env.bucket).trim();
+
+  // Secreto vacío = conservar el guardado (igual que Wompi/Correo). Las llaves
+  // del token de R2 son credenciales: se guardan cifradas en reposo.
+  const encAccessKey = accessKeyId ? encryptSecret(accessKeyId) : keep(stored.accessKeyId);
+  const encSecretKey = secretAccessKey ? encryptSecret(secretAccessKey) : keep(stored.secretAccessKey);
+
+  if (driver === "r2") {
+    if (!/^https?:\/\/.+/i.test(endpoint)) {
+      return {
+        ok: false,
+        error:
+          "El endpoint debe ser una URL http(s), p. ej. https://<CUENTA>.r2.cloudflarestorage.com.",
+      };
+    }
+    if (!bucket) return { ok: false, error: "Falta el nombre del bucket." };
+    // Vale lo que se escriba ahora, lo ya guardado o lo que venga del entorno.
+    const hasAccess = !!(accessKeyId || keep(stored.accessKeyId) || env.accessKeyId);
+    const hasSecret = !!(secretAccessKey || keep(stored.secretAccessKey) || env.secretAccessKey);
+    if (!hasAccess || !hasSecret) {
+      return { ok: false, error: "El driver R2 requiere el Access Key ID y el Secret Access Key." };
+    }
+  }
+
+  const value = {
+    driver,
+    endpoint,
+    bucket,
+    accessKeyId: encAccessKey,
+    secretAccessKey: encSecretKey,
+  };
+
+  if (row) {
+    await db
+      .update(schema.storeSettings)
+      .set({ value: value as object, updatedAt: new Date() })
+      .where(eq(schema.storeSettings.id, row.id));
+  } else {
+    await db.insert(schema.storeSettings).values({ key: STORAGE_SETTINGS_KEY, value: value as object });
+  }
+
+  // El runtime cachea el driver; tras guardar hay que forzar que lo relea (las
+  // demás instancias lo recogen al vencer el caché).
+  invalidateStorageDriver();
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
+const storageTestSchema = z.object({
+  endpoint: z.string().trim().max(255).optional(),
+  bucket: z.string().trim().max(255).optional(),
+  accessKeyId: z.string().trim().max(255).optional(),
+  secretAccessKey: z.string().trim().max(512).optional(),
+});
+
+/** Prueba la conexión escribiendo y borrando un objeto temporal. Acepta valores
+ *  sin guardar (los del formulario) y cae a la config efectiva para lo que falte. */
+export async function testStorageConnection(
+  input: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+
+  const parsed = storageTestSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((e) => e.message).join("; ") };
+  }
+
+  const effective = await loadStorageSettings();
+  const endpoint = (parsed.data.endpoint?.trim() || effective.endpoint).trim();
+  const bucket = (parsed.data.bucket?.trim() || effective.bucket).trim();
+  const accessKeyId = parsed.data.accessKeyId?.trim() || effective.accessKeyId;
+  const secretAccessKey = parsed.data.secretAccessKey?.trim() || effective.secretAccessKey;
+
+  const driver = createR2Storage({ endpoint, accessKeyId, secretAccessKey, bucket });
+  if (!driver) {
+    return { ok: false, error: "Faltan endpoint, bucket o llaves para probar la conexión." };
+  }
+
+  const key = `tmp/healthcheck-${randomUUID()}.txt`;
+  try {
+    await driver.put(key, new TextEncoder().encode("ok"));
+    await driver.remove(key);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo escribir en el bucket." };
   }
 }

@@ -6,7 +6,7 @@ import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
-import { storage, StorageError } from "@/lib/server/storage";
+import { storage, storageKind, StorageError } from "@/lib/server/storage";
 import { getOrBuildProductPackZip } from "@/lib/server/pack";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { serverEnv } from "@/lib/serverEnv";
@@ -106,8 +106,9 @@ export async function GET(
 
   // --- 4) Localizar el pack ------------------------------------------------
   const conventionalKey = `products/${productId}/pack.zip`;
+  const kind = await storageKind();
 
-  if (!product.zipKey && storage.kind === "r2") {
+  if (!product.zipKey && kind === "r2") {
     // Con R2 el pack se sube a mano al bucket. Si el producto todavía no tiene
     // `zipKey` guardado, se adopta la clave convencional si el objeto existe, y
     // se persiste: no hace falta tocar la base de datos a mano por cada producto.
@@ -125,7 +126,7 @@ export async function GET(
 
   if (!product.zipKey) {
     // Sin driver remoto se puede generar al vuelo (single-flight).
-    if (storage.kind === "r2") {
+    if (kind === "r2") {
       return Response.json(
         { error: "Este producto todavía no tiene un pack en el bucket." },
         { status: 404 },
@@ -154,7 +155,7 @@ export async function GET(
   if (purchase) {
     // `zipSizeBytes` puede venir cacheado y el objeto haber desaparecido, asi
     // que en R2 se confirma contra el bucket antes de consumir nada.
-    if (storage.kind === "r2") {
+    if (kind === "r2") {
       try {
         await storage.stat(product.zipKey as string);
       } catch {
@@ -243,7 +244,7 @@ export async function GET(
   // proxy de los bytes: los packs llegan a cientos de MB y pasarían enteros
   // por la función de Vercel. La autorización ya se validó arriba; la URL solo
   // existe unos minutos y R2 no cobra por salida a internet.
-  if (storage.kind === "r2") {
+  if (kind === "r2") {
     try {
       const signed = await storage.signedUrl(product.zipKey, {
         expiresInSeconds: serverEnv.signedUrlTtlSeconds,

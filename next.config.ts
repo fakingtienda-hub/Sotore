@@ -21,6 +21,12 @@ const storageOrigins = (() => {
   }
 })();
 
+/* El endpoint de R2 puede configurarse desde el CRM (guardado en la BD), no solo
+   por STORAGE_ENDPOINT: en build no se conoce, así que se permite siempre el host
+   de Cloudflare R2. Cubre la forma con y sin bucket porque el cliente S3 usa
+   virtual-hosted style (https://<bucket>.<cuenta>.r2.cloudflarestorage.com). */
+const R2_CSP_ORIGIN = " https://*.r2.cloudflarestorage.com";
+
 /* CSP de la app. Notas:
    - script-src necesita 'unsafe-inline' porque el App Router de Next inyecta
      el payload serializado del Flight stream en <script> inline. No hay
@@ -41,7 +47,7 @@ const buildCsp = (frameAncestors: "'self'" | "'none'") =>
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
     "media-src 'self' blob:",
-    `connect-src 'self'${storageOrigins}${isProd ? "" : " ws: wss:"}`,
+    `connect-src 'self'${storageOrigins}${R2_CSP_ORIGIN}${isProd ? "" : " ws: wss:"}`,
     "object-src 'none'",
     "base-uri 'self'",
     `frame-ancestors ${frameAncestors}`,

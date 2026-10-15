@@ -283,13 +283,23 @@ export class R2Storage implements StorageDriver {
   }
 }
 
-export function createR2Storage(): R2Storage | null {
-  const { storageEndpoint, storageAccessKeyId, storageSecretAccessKey, storageBucket } = serverEnv;
-  if (!storageEndpoint || !storageAccessKeyId || !storageSecretAccessKey) return null;
-  return new R2Storage({
-    endpoint: storageEndpoint,
-    accessKeyId: storageAccessKeyId,
-    secretAccessKey: storageSecretAccessKey,
-    bucket: storageBucket,
-  });
+/** Construye el driver R2. Sin argumentos toma las credenciales del entorno
+ *  (uso en scripts); con `config` usa las que le pasen (config guardada en la
+ *  BD desde el panel). Devuelve `null` si falta endpoint o alguna de las dos
+ *  llaves. */
+export function createR2Storage(config?: {
+  endpoint: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+}): R2Storage | null {
+  const cfg =
+    config ?? {
+      endpoint: serverEnv.storageEndpoint,
+      accessKeyId: serverEnv.storageAccessKeyId,
+      secretAccessKey: serverEnv.storageSecretAccessKey,
+      bucket: serverEnv.storageBucket,
+    };
+  if (!cfg.endpoint || !cfg.accessKeyId || !cfg.secretAccessKey) return null;
+  return new R2Storage(cfg);
 }

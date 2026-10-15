@@ -8,7 +8,7 @@ import { ZipArchive } from "archiver";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
-import { storage } from "@/lib/server/storage";
+import { storage, storageKind } from "@/lib/server/storage";
 
 function safeEntryName(name: string): string {
   return name.replace(/[\\/\0]/g, "_").trim();
@@ -140,7 +140,7 @@ export function getOrBuildProductPackZip(
  *  de grupo dejaría al cliente sin descarga y obligaría a volver a subir cientos
  *  de MB. El `zipKey` se respeta y quien lo gestiona es el bucket. */
 export async function invalidateProductPackZip(productId: string): Promise<void> {
-  if (storage.kind === "r2") return;
+  if ((await storageKind()) === "r2") return;
   try {
     const [row] = await db
       .select({ zipKey: schema.products.zipKey })
